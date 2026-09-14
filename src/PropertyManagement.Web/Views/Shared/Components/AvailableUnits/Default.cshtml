@@ -1,9 +1,13 @@
 @model PropertyManagement.Web.ViewComponents.AvailableUnitsModel
+@using PropertyManagement.Domain.Enums
 @*
     The view component's own view. Convention puts it at
     Views/Shared/Components/<ComponentName>/Default.cshtml, which is what lets any page invoke
     the component without knowing where its markup lives.
 *@
+@{
+    var canApply = User.IsInRole(UserRole.Applicant);
+}
 
 <div class="card shadow-sm">
     <div class="card-header bg-white d-flex justify-content-between align-items-center">
@@ -28,6 +32,10 @@
                         <th scope="col">Type</th>
                         <th scope="col" class="text-end">Bedrooms</th>
                         <th scope="col" class="text-end">Monthly rent</th>
+                        @if (canApply)
+                        {
+                            <th scope="col" class="text-end">Apply</th>
+                        }
                     </tr>
                 </thead>
                 <tbody>
@@ -39,6 +47,16 @@
                         <td>@unit.UnitType?.Name</td>
                         <td class="text-end">@unit.Bedrooms</td>
                         <td class="text-end">@unit.MonthlyRent.ToString("C0")</td>
+                        @if (canApply)
+                        {
+                            <td class="text-end">
+                                <form asp-controller="RentalApplications" asp-action="Start" method="post">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="unitId" value="@unit.Id" />
+                                    <button type="submit" class="btn btn-sm btn-primary">Apply</button>
+                                </form>
+                            </td>
+                        }
                     </tr>
                 }
                 </tbody>

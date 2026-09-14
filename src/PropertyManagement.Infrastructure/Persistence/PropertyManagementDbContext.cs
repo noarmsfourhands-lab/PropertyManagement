@@ -30,6 +30,18 @@ public class PropertyManagementDbContext(DbContextOptions<PropertyManagementDbCo
 
     public DbSet<PropertyManagerNote> PropertyManagerNotes => Set<PropertyManagerNote>();
 
+    /// <summary>
+    /// Applied to every DateTime in the model rather than property by property, so a timestamp
+    /// added later cannot quietly miss out on being normalised to UTC.
+    /// </summary>
+    protected override void ConfigureConventions(ModelConfigurationBuilder builder)
+    {
+        base.ConfigureConventions(builder);
+
+        builder.Properties<DateTime>().HaveConversion<UtcDateTimeConverter>();
+        builder.Properties<DateTime?>().HaveConversion<NullableUtcDateTimeConverter>();
+    }
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);

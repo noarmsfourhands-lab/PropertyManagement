@@ -180,8 +180,8 @@ namespace PropertyManagement.Infrastructure.Persistence.Migrations
                     b.Property<int>("FromStatus")
                         .HasColumnType("int");
 
-                    b.Property<DateTimeOffset>("OccurredAtUtc")
-                        .HasColumnType("datetimeoffset");
+                    b.Property<DateTime>("OccurredAtUtc")
+                        .HasColumnType("datetime2");
 
                     b.Property<int?>("Outcome")
                         .HasColumnType("int");
@@ -300,14 +300,14 @@ namespace PropertyManagement.Infrastructure.Persistence.Migrations
                         .HasMaxLength(4000)
                         .HasColumnType("nvarchar(4000)");
 
-                    b.Property<DateTimeOffset>("CreatedAtUtc")
-                        .HasColumnType("datetimeoffset");
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
 
                     b.Property<int>("RentalApplicationId")
                         .HasColumnType("int");
 
-                    b.Property<DateTimeOffset?>("UpdatedAtUtc")
-                        .HasColumnType("datetimeoffset");
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
 
                     b.HasKey("Id");
 
@@ -324,28 +324,28 @@ namespace PropertyManagement.Infrastructure.Persistence.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<DateTimeOffset?>("ApplicantInformationSavedAtUtc")
-                        .HasColumnType("datetimeoffset");
+                    b.Property<DateTime?>("ApplicantInformationSavedAtUtc")
+                        .HasColumnType("datetime2");
 
                     b.Property<Guid>("ApplicantInformationVersion")
                         .IsConcurrencyToken()
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<DateTimeOffset?>("ClaimedAtUtc")
-                        .HasColumnType("datetimeoffset");
+                    b.Property<DateTime?>("ClaimedAtUtc")
+                        .HasColumnType("datetime2");
 
                     b.Property<string>("ClaimedByUserId")
                         .HasMaxLength(450)
                         .HasColumnType("nvarchar(450)");
 
-                    b.Property<DateTimeOffset>("CreatedAtUtc")
-                        .HasColumnType("datetimeoffset");
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
 
-                    b.Property<DateTimeOffset?>("DecidedAtUtc")
-                        .HasColumnType("datetimeoffset");
+                    b.Property<DateTime?>("DecidedAtUtc")
+                        .HasColumnType("datetime2");
 
-                    b.Property<DateTimeOffset?>("ResidenceHistorySavedAtUtc")
-                        .HasColumnType("datetimeoffset");
+                    b.Property<DateTime?>("ResidenceHistorySavedAtUtc")
+                        .HasColumnType("datetime2");
 
                     b.Property<Guid>("ResidenceHistoryVersion")
                         .IsConcurrencyToken()
@@ -354,8 +354,8 @@ namespace PropertyManagement.Infrastructure.Persistence.Migrations
                     b.Property<int>("Status")
                         .HasColumnType("int");
 
-                    b.Property<DateTimeOffset?>("SubmittedAtUtc")
-                        .HasColumnType("datetimeoffset");
+                    b.Property<DateTime?>("SubmittedAtUtc")
+                        .HasColumnType("datetime2");
 
                     b.Property<int>("UnitId")
                         .HasColumnType("int");
@@ -378,8 +378,8 @@ namespace PropertyManagement.Infrastructure.Persistence.Migrations
                         .HasMaxLength(450)
                         .HasColumnType("nvarchar(450)");
 
-                    b.Property<DateTimeOffset>("AddedAtUtc")
-                        .HasColumnType("datetimeoffset");
+                    b.Property<DateTime>("AddedAtUtc")
+                        .HasColumnType("datetime2");
 
                     b.Property<bool>("IsPrimary")
                         .HasColumnType("bit");

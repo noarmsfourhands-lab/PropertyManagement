@@ -1,0 +1,48 @@
+@model PropertyManagement.Web.ViewComponents.ApplicationHistoryModel
+@using PropertyManagement.Web.ViewModels.Applications
+
+<div class="card shadow-sm">
+    <div class="card-header bg-white fw-semibold">History</div>
+
+    @if (Model.Entries.Count == 0)
+    {
+        <div class="card-body text-muted text-center py-4">
+            <p class="mb-0">Nothing has happened to this application yet.</p>
+        </div>
+    }
+    else
+    {
+        <ul class="list-group list-group-flush">
+        @foreach (var entry in Model.Entries)
+        {
+            <li class="list-group-item">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <span class="badge @ApplicationListViewModel.BadgeClassFor(entry.FromStatus)">
+                            @ApplicationListViewModel.DisplayNameFor(entry.FromStatus)
+                        </span>
+                        <span class="text-muted mx-1">&rarr;</span>
+                        <span class="badge @ApplicationListViewModel.BadgeClassFor(entry.ToStatus)">
+                            @ApplicationListViewModel.DisplayNameFor(entry.ToStatus)
+                        </span>
+
+                        @if (entry.Outcome is not null)
+                        {
+                            <span class="text-muted small ms-2">Outcome: @entry.Outcome</span>
+                        }
+
+                        <div class="small text-muted mt-1">
+                            @entry.ActorName &middot; @entry.OccurredAtUtc.ToLocalTime().ToString("d MMM yyyy, HH:mm")
+                        </div>
+
+                        @if (!string.IsNullOrWhiteSpace(entry.Comment))
+                        {
+                            <p class="mb-0 mt-2">@entry.Comment</p>
+                        }
+                    </div>
+                </div>
+            </li>
+        }
+        </ul>
+    }
+</div>

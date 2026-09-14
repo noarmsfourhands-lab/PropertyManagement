@@ -25,10 +25,11 @@ public abstract class ModalController : Controller
     }
 
     /// <summary>
-    /// Closes the modal and tells the page which region to re-fetch, so only the affected part
-    /// of the screen changes.
+    /// Closes the modal and tells the page which region to re-fetch, so only the affected part of
+    /// the screen changes. A null target reloads the page instead, which is what a status change
+    /// affecting the whole screen actually needs.
     /// </summary>
-    protected IActionResult ModalSucceeded(string refreshUrl, string target, string? message = null) =>
+    protected IActionResult ModalSucceeded(string refreshUrl, string? target, string? message = null) =>
         Ok(new { refreshUrl, target, message });
 
     /// <summary>

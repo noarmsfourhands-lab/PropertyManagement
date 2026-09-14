@@ -1,0 +1,17 @@
+@model PropertyManagement.Web.ViewModels.Applications.ApplicationWizardViewModel
+@*
+    The Summary is a read-only view of both sections. It reuses the very same partials: because
+    the current section is the Summary, the model reports the sections as not editable, so they
+    render as text without this view having to ask for a different mode.
+*@
+<h2 class="h5 mb-3">Summary</h2>
+
+<div class="mb-4">
+    <partial name="_ApplicantInformationSection" model="Model" />
+</div>
+
+<hr class="my-4" />
+
+<div>
+    <partial name="_ResidenceHistorySection" model="Model" />
+</div>

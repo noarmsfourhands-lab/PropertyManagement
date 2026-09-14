@@ -39,13 +39,25 @@ public class DatabaseSeeder(
         ("Garden Flat", false)
     ];
 
+    /// <summary>Brings the schema up to date, then fills it.</summary>
     public async Task SeedAsync(CancellationToken cancellationToken = default)
     {
         await db.Database.MigrateAsync(cancellationToken);
+        await SeedDataAsync(cancellationToken);
+    }
 
+    /// <summary>
+    /// The data half on its own, separate from migrating, because the two are different concerns:
+    /// one changes the shape of the database and the other its contents. Keeping them apart also
+    /// lets the idempotency of the seeding be tested against a schema created any other way.
+    /// </summary>
+    public async Task SeedDataAsync(CancellationToken cancellationToken = default)
+    {
+        // The switch guards the writing, not the migrating: a real deployment still wants its
+        // schema brought up to date without demo data appearing in it.
         if (!_options.Enabled)
         {
-            logger.LogInformation("Seeding is disabled; migrations applied and nothing was written.");
+            logger.LogInformation("Seeding is disabled; no demo data was written.");
             return;
         }
 
@@ -227,8 +239,8 @@ public class DatabaseSeeder(
                 $"Seeding needs {required} units to cover every status but found {units.Count}.");
         }
 
-        var now = timeProvider.GetUtcNow();
-        var today = DateOnly.FromDateTime(now.UtcDateTime);
+        var now = timeProvider.GetUtcNow().UtcDateTime;
+        var today = DateOnly.FromDateTime(now);
         var faker = new Faker();
         var cursor = 0;
 
@@ -269,7 +281,7 @@ public class DatabaseSeeder(
         Unit unit,
         ApplicationUser applicant,
         ApplicationStatus status,
-        DateTimeOffset now,
+        DateTime now,
         Faker faker)
     {
         var createdAt = now.AddDays(-faker.Random.Int(10, 90));
@@ -325,11 +337,11 @@ public class DatabaseSeeder(
         return application;
     }
 
-    private static List<Residence> BuildResidences(Faker faker, DateTimeOffset createdAt)
+    private static List<Residence> BuildResidences(Faker faker, DateTime createdAt)
     {
         var count = faker.Random.Int(1, 3);
         var residences = new List<Residence>(count);
-        var moveOut = DateOnly.FromDateTime(createdAt.UtcDateTime).AddYears(-1);
+        var moveOut = DateOnly.FromDateTime(createdAt).AddYears(-1);
 
         for (var index = 0; index < count; index++)
         {
@@ -362,7 +374,7 @@ public class DatabaseSeeder(
         ApplicationUser applicant,
         ApplicationUser manager,
         ApplicationStatus status,
-        DateTimeOffset now,
+        DateTime now,
         Faker faker)
     {
         if (status == ApplicationStatus.Draft)

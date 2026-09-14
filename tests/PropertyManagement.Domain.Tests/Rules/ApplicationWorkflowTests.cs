@@ -19,8 +19,8 @@ public class ApplicationWorkflowTests
             Id = 1,
             UnitId = 1,
             Status = status,
-            ApplicantInformationSavedAtUtc = applicantInformationSaved ? DateTimeOffset.UtcNow : null,
-            ResidenceHistorySavedAtUtc = residenceHistorySaved ? DateTimeOffset.UtcNow : null,
+            ApplicantInformationSavedAtUtc = applicantInformationSaved ? DateTime.UtcNow : null,
+            ResidenceHistorySavedAtUtc = residenceHistorySaved ? DateTime.UtcNow : null,
             ClaimedByUserId = claimedBy
         };
 

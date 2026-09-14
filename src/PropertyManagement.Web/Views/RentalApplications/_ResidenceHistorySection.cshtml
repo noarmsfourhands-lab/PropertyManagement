@@ -1,0 +1,21 @@
+@model PropertyManagement.Web.ViewModels.Applications.ApplicationWizardViewModel
+@*
+    Section two. It has no fields of its own: residences are managed through a modal, and the
+    section's validity is a domain rule about how many there are.
+*@
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2 class="h5 mb-0">Residence history</h2>
+
+    @if (Model.SectionIsEditable)
+    {
+        <button type="button" class="btn btn-sm btn-primary"
+                data-modal-url="@Url.Action("ResidenceForm", new { id = 0, applicationId = Model.ApplicationId })">
+            Add residence
+        </button>
+    }
+</div>
+
+@* The region the residence modal refreshes, so the rest of the page is untouched. *@
+<div id="residence-list">
+    <partial name="_ResidenceList" model="Model.ResidenceList()" />
+</div>

@@ -1,0 +1,24 @@
+@model PropertyManagement.Domain.Entities.Residence
+
+<form asp-action="DeleteResidence" asp-route-id="@Model.Id"
+      asp-route-applicationId="@Model.RentalApplicationId" method="post"
+      data-modal-form
+      data-refresh-target="#residence-list"
+      data-refresh-url="@Url.Action("ResidenceListPartial", new { id = Model.RentalApplicationId })">
+    @Html.AntiForgeryToken()
+
+    <div class="modal-header">
+        <h5 class="modal-title">Remove residence</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+    </div>
+
+    <div class="modal-body">
+        <div asp-validation-summary="ModelOnly" class="text-danger small mb-3"></div>
+        <p class="mb-0">Remove <strong>@Model.AddressLine1</strong> from your residence history?</p>
+    </div>
+
+    <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="submit" class="btn btn-danger">Remove</button>
+    </div>
+</form>

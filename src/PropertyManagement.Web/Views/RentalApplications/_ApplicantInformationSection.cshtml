@@ -1,0 +1,98 @@
+@model PropertyManagement.Web.ViewModels.Applications.ApplicationWizardViewModel
+@*
+    Section one, rendered from one partial in two modes. Whether it shows inputs or text is the
+    server's decision, carried on the model; the markup never asks the user's role.
+*@
+<h2 class="h5 mb-3">Applicant information</h2>
+
+@if (Model.SectionIsEditable)
+{
+    <div class="row">
+        <div class="col-sm-6 mb-3">
+            <label asp-for="ApplicantInformation.FirstName" class="form-label"></label>
+            <input asp-for="ApplicantInformation.FirstName" class="form-control" autocomplete="given-name" />
+            <span asp-validation-for="ApplicantInformation.FirstName" class="text-danger small"></span>
+        </div>
+        <div class="col-sm-6 mb-3">
+            <label asp-for="ApplicantInformation.LastName" class="form-label"></label>
+            <input asp-for="ApplicantInformation.LastName" class="form-control" autocomplete="family-name" />
+            <span asp-validation-for="ApplicantInformation.LastName" class="text-danger small"></span>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-sm-6 mb-3">
+            <label asp-for="ApplicantInformation.Phone" class="form-label"></label>
+            <input asp-for="ApplicantInformation.Phone" class="form-control" autocomplete="tel" />
+            <span asp-validation-for="ApplicantInformation.Phone" class="text-danger small"></span>
+        </div>
+        <div class="col-sm-6 mb-3">
+            <label asp-for="ApplicantInformation.Email" class="form-label"></label>
+            <input asp-for="ApplicantInformation.Email" class="form-control" autocomplete="email" />
+            <span asp-validation-for="ApplicantInformation.Email" class="text-danger small"></span>
+        </div>
+    </div>
+
+    <div class="mb-3">
+        <label asp-for="ApplicantInformation.AddressLine1" class="form-label"></label>
+        <input asp-for="ApplicantInformation.AddressLine1" class="form-control" autocomplete="address-line1" />
+        <span asp-validation-for="ApplicantInformation.AddressLine1" class="text-danger small"></span>
+    </div>
+
+    <div class="mb-3">
+        <label asp-for="ApplicantInformation.AddressLine2" class="form-label"></label>
+        <input asp-for="ApplicantInformation.AddressLine2" class="form-control" autocomplete="address-line2" />
+        <span asp-validation-for="ApplicantInformation.AddressLine2" class="text-danger small"></span>
+    </div>
+
+    <div class="row">
+        <div class="col-sm-6 mb-3">
+            <label asp-for="ApplicantInformation.City" class="form-label"></label>
+            <input asp-for="ApplicantInformation.City" class="form-control" autocomplete="address-level2" />
+            <span asp-validation-for="ApplicantInformation.City" class="text-danger small"></span>
+        </div>
+        <div class="col-sm-3 mb-3">
+            <label asp-for="ApplicantInformation.State" class="form-label"></label>
+            <input asp-for="ApplicantInformation.State" class="form-control" autocomplete="address-level1" />
+            <span asp-validation-for="ApplicantInformation.State" class="text-danger small"></span>
+        </div>
+        <div class="col-sm-3 mb-3">
+            <label asp-for="ApplicantInformation.PostalCode" class="form-label"></label>
+            <input asp-for="ApplicantInformation.PostalCode" class="form-control" autocomplete="postal-code" />
+            <span asp-validation-for="ApplicantInformation.PostalCode" class="text-danger small"></span>
+        </div>
+    </div>
+}
+else
+{
+    var info = Model.ApplicantInformation;
+    var blank = "Not provided";
+
+    <dl class="row mb-0">
+        <dt class="col-sm-3">Name</dt>
+        <dd class="col-sm-9">@($"{info.FirstName} {info.LastName}".Trim() is { Length: > 0 } n ? n : blank)</dd>
+
+        <dt class="col-sm-3">Phone</dt>
+        <dd class="col-sm-9">@(info.Phone ?? blank)</dd>
+
+        <dt class="col-sm-3">Email</dt>
+        <dd class="col-sm-9">@(info.Email ?? blank)</dd>
+
+        <dt class="col-sm-3">Current address</dt>
+        <dd class="col-sm-9">
+            @if (string.IsNullOrWhiteSpace(info.AddressLine1))
+            {
+                @blank
+            }
+            else
+            {
+                @info.AddressLine1
+                @if (!string.IsNullOrWhiteSpace(info.AddressLine2))
+                {
+                    <br />@info.AddressLine2
+                }
+                <br />@info.City @info.State @info.PostalCode
+            }
+        </dd>
+    </dl>
+}

@@ -28,5 +28,5 @@ public class ApplicationEvent
 
     public string ActorName { get; set; } = string.Empty;
 
-    public DateTimeOffset OccurredAtUtc { get; set; }
+    public DateTime OccurredAtUtc { get; set; }
 }

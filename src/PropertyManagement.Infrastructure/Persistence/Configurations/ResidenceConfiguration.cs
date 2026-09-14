@@ -20,8 +20,8 @@ public class ResidenceConfiguration : IEntityTypeConfiguration<Residence>
         builder.Property(residence => residence.PostalCode).IsRequired().HasMaxLength(20);
         builder.Property(residence => residence.LandlordName).IsRequired().HasMaxLength(200);
         builder.Property(residence => residence.LandlordPhone).IsRequired().HasMaxLength(30);
-        builder.Property(residence => residence.MoveInDate).HasColumnType("date").IsRequired();
-        builder.Property(residence => residence.MoveOutDate).HasColumnType("date");
+        builder.Property(residence => residence.MoveInDate).IsRequired();
+        builder.Property(residence => residence.MoveOutDate);
 
         builder.HasIndex(residence => residence.RentalApplicationId);
     }

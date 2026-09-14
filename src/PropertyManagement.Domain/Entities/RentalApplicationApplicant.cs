@@ -15,5 +15,5 @@ public class RentalApplicationApplicant
     /// <summary>The applicant who started the application. Used for display, not for permissions.</summary>
     public bool IsPrimary { get; set; }
 
-    public DateTimeOffset AddedAtUtc { get; set; }
+    public DateTime AddedAtUtc { get; set; }
 }

@@ -33,9 +33,9 @@ public class RentalApplication
     // Section completion. Submit is only offered once both sections have been saved,
     // so each one records when it was last persisted rather than inferring it from field values.
 
-    public DateTimeOffset? ApplicantInformationSavedAtUtc { get; set; }
+    public DateTime? ApplicantInformationSavedAtUtc { get; set; }
 
-    public DateTimeOffset? ResidenceHistorySavedAtUtc { get; set; }
+    public DateTime? ResidenceHistorySavedAtUtc { get; set; }
 
     /// <summary>
     /// Bonus 5a. Per-section concurrency tokens. Two applicants saving different sections do not
@@ -48,16 +48,16 @@ public class RentalApplication
 
     // Timestamps
 
-    public DateTimeOffset CreatedAtUtc { get; set; }
+    public DateTime CreatedAtUtc { get; set; }
 
-    public DateTimeOffset? SubmittedAtUtc { get; set; }
+    public DateTime? SubmittedAtUtc { get; set; }
 
-    public DateTimeOffset? DecidedAtUtc { get; set; }
+    public DateTime? DecidedAtUtc { get; set; }
 
     /// <summary>Bonus 2. The property manager currently holding the application, when Under Review.</summary>
     public string? ClaimedByUserId { get; set; }
 
-    public DateTimeOffset? ClaimedAtUtc { get; set; }
+    public DateTime? ClaimedAtUtc { get; set; }
 
     public bool ApplicantInformationSaved => ApplicantInformationSavedAtUtc is not null;
 

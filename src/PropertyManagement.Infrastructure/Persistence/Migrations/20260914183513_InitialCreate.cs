@@ -236,15 +236,15 @@ namespace PropertyManagement.Infrastructure.Persistence.Migrations
                     ApplicantCity = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
                     ApplicantState = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: true),
                     ApplicantPostalCode = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: true),
-                    ApplicantInformationSavedAtUtc = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: true),
-                    ResidenceHistorySavedAtUtc = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: true),
+                    ApplicantInformationSavedAtUtc = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    ResidenceHistorySavedAtUtc = table.Column<DateTime>(type: "datetime2", nullable: true),
                     ApplicantInformationVersion = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
                     ResidenceHistoryVersion = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
-                    CreatedAtUtc = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: false),
-                    SubmittedAtUtc = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: true),
-                    DecidedAtUtc = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: true),
+                    CreatedAtUtc = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    SubmittedAtUtc = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    DecidedAtUtc = table.Column<DateTime>(type: "datetime2", nullable: true),
                     ClaimedByUserId = table.Column<string>(type: "nvarchar(450)", maxLength: 450, nullable: true),
-                    ClaimedAtUtc = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: true)
+                    ClaimedAtUtc = table.Column<DateTime>(type: "datetime2", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -270,7 +270,7 @@ namespace PropertyManagement.Infrastructure.Persistence.Migrations
                     Comment = table.Column<string>(type: "nvarchar(2000)", maxLength: 2000, nullable: true),
                     ActorUserId = table.Column<string>(type: "nvarchar(450)", maxLength: 450, nullable: false),
                     ActorName = table.Column<string>(type: "nvarchar(256)", maxLength: 256, nullable: false),
-                    OccurredAtUtc = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: false)
+                    OccurredAtUtc = table.Column<DateTime>(type: "datetime2", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -322,8 +322,8 @@ namespace PropertyManagement.Infrastructure.Persistence.Migrations
                     Body = table.Column<string>(type: "nvarchar(4000)", maxLength: 4000, nullable: false),
                     AuthorUserId = table.Column<string>(type: "nvarchar(450)", maxLength: 450, nullable: false),
                     AuthorName = table.Column<string>(type: "nvarchar(256)", maxLength: 256, nullable: false),
-                    CreatedAtUtc = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: false),
-                    UpdatedAtUtc = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: true)
+                    CreatedAtUtc = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    UpdatedAtUtc = table.Column<DateTime>(type: "datetime2", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -343,7 +343,7 @@ namespace PropertyManagement.Infrastructure.Persistence.Migrations
                     RentalApplicationId = table.Column<int>(type: "int", nullable: false),
                     ApplicantUserId = table.Column<string>(type: "nvarchar(450)", maxLength: 450, nullable: false),
                     IsPrimary = table.Column<bool>(type: "bit", nullable: false),
-                    AddedAtUtc = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: false)
+                    AddedAtUtc = table.Column<DateTime>(type: "datetime2", nullable: false)
                 },
                 constraints: table =>
                 {

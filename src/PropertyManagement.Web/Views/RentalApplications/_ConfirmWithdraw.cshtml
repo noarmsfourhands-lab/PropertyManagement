@@ -1,0 +1,22 @@
+@model PropertyManagement.Domain.Entities.RentalApplication
+
+@* No refresh target: withdrawing changes the whole page, so the browser reloads it. *@
+<form asp-action="Withdraw" asp-route-id="@Model.Id" method="post" data-modal-form>
+    @Html.AntiForgeryToken()
+
+    <div class="modal-header">
+        <h5 class="modal-title">Withdraw application</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+    </div>
+
+    <div class="modal-body">
+        <div asp-validation-summary="ModelOnly" class="text-danger small mb-3"></div>
+        <p class="mb-1">Withdraw your application for unit <strong>@Model.Unit?.UnitNumber</strong>?</p>
+        <p class="text-muted small mb-0">A withdrawn application cannot be reopened.</p>
+    </div>
+
+    <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="submit" class="btn btn-danger">Withdraw</button>
+    </div>
+</form>

@@ -1,0 +1,136 @@
+@model PropertyManagement.Web.ViewModels.Applications.ApplicationWizardViewModel
+@using PropertyManagement.Web.ViewModels.Applications
+@{
+    ViewData["Title"] = $"Application for unit {Model.Unit.UnitNumber}";
+}
+
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a asp-action="Index">Applications</a></li>
+        <li class="breadcrumb-item active" aria-current="page">Application @Model.ApplicationId</li>
+    </ol>
+</nav>
+
+<div class="d-flex justify-content-between align-items-start mb-3">
+    <div>
+        <h1 class="h4 mb-1">@Model.Unit.PropertyName &middot; Unit @Model.Unit.UnitNumber</h1>
+        <p class="text-muted small mb-0">
+            @Model.Unit.UnitTypeName &middot; @Model.Unit.Bedrooms bedroom(s) &middot;
+            @Model.Unit.MonthlyRent.ToString("C0") per month
+        </p>
+    </div>
+    <div class="text-end">
+        <span class="badge @ApplicationListViewModel.BadgeClassFor(Model.Status) fs-6">
+            @ApplicationListViewModel.DisplayNameFor(Model.Status)
+        </span>
+    </div>
+</div>
+
+<partial name="_WizardSteps" model="Model" />
+
+@* One form, one action. The button pressed is what decides what happens. *@
+<form asp-action="Section" method="post" novalidate>
+    @Html.AntiForgeryToken()
+    <input type="hidden" asp-for="ApplicationId" />
+    <input type="hidden" asp-for="CurrentSection" />
+    <input type="hidden" asp-for="ApplicantInformationVersion" />
+    <input type="hidden" asp-for="ResidenceHistoryVersion" />
+
+    <div class="card shadow-sm">
+        <div class="card-body p-4">
+            <div asp-validation-summary="ModelOnly" class="alert alert-danger py-2 small"></div>
+
+            @switch (Model.CurrentSection)
+            {
+                case ApplicationSection.ApplicantInformation:
+                    <partial name="_ApplicantInformationSection" model="Model" />
+                    break;
+
+                case ApplicationSection.ResidenceHistory:
+                    <partial name="_ResidenceHistorySection" model="Model" />
+                    break;
+
+                case ApplicationSection.Summary:
+                    <partial name="_SummarySection" model="Model" />
+                    break;
+            }
+        </div>
+
+        <div class="card-footer bg-white d-flex justify-content-between align-items-center">
+            <div>
+                @if (Model.ShowBack)
+                {
+                    @* Back posts too, but the action returns without saving or validating. *@
+                    <button type="submit" name="command" value="@WizardCommand.Back" class="btn btn-outline-secondary"
+                            formnovalidate>
+                        Back
+                    </button>
+                }
+            </div>
+
+            <div class="d-flex align-items-center gap-2">
+                @if (Model.CurrentSection == ApplicationSection.Summary && Model.CanEdit && !Model.CanSubmit)
+                {
+                    <span class="text-muted small">@Model.SubmitBlockedReason</span>
+                }
+
+                @if (Model.ShowContinue)
+                {
+                    <button type="submit" name="command" value="@WizardCommand.Continue" class="btn btn-primary">
+                        Continue
+                    </button>
+                }
+
+                @if (Model.CurrentSection == ApplicationSection.Summary && Model.CanEdit && Model.CanSubmit)
+                {
+                    <button type="submit" name="command" value="@WizardCommand.Submit" class="btn btn-success">
+                        Submit application
+                    </button>
+                }
+            </div>
+        </div>
+    </div>
+</form>
+
+<div class="d-flex gap-2 mt-3">
+    @if (Model.CanWithdraw)
+    {
+        <button type="button" class="btn btn-outline-danger btn-sm"
+                data-modal-url="@Url.Action("ConfirmWithdraw", new { id = Model.ApplicationId })">
+            Withdraw application
+        </button>
+    }
+
+    @if (Model.CanClaim)
+    {
+        <form asp-controller="Review" asp-action="Claim" asp-route-id="@Model.ApplicationId" method="post">
+            @Html.AntiForgeryToken()
+            <button type="submit" class="btn btn-outline-primary btn-sm">Claim for review</button>
+        </form>
+    }
+
+    @if (Model.CanRelease)
+    {
+        <form asp-controller="Review" asp-action="Release" asp-route-id="@Model.ApplicationId" method="post">
+            @Html.AntiForgeryToken()
+            <button type="submit" class="btn btn-outline-secondary btn-sm">Release to queue</button>
+        </form>
+    }
+
+    @if (Model.CanReview)
+    {
+        <button type="button" class="btn btn-primary btn-sm"
+                data-modal-url="@Url.Action("Form", "Review", new { id = Model.ApplicationId })">
+            Complete review
+        </button>
+    }
+</div>
+
+@* A view component: it queries its own data and decides for itself that applicants see nothing. *@
+<div class="mt-4">
+    @await Component.InvokeAsync("ApplicationHistory", new { applicationId = Model.ApplicationId })
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

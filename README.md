@@ -96,23 +96,45 @@ set `Seeding:Enabled` to `false` to apply migrations without writing demo data.
 dotnet test
 ```
 
-The business rules are pure functions over domain objects with no database or HTTP dependency, so
-the suite runs in well under a second and needs no SQL Server.
+153 tests across two suites, neither of which needs SQL Server:
+
+| Suite | What it covers |
+| --- | --- |
+| `PropertyManagement.Domain.Tests` | The business rules, as plain function calls over domain objects |
+| `PropertyManagement.Infrastructure.Tests` | The model, the queries and the services, against SQLite held in memory |
+
+The second suite is what proves the schema actually builds, the queries translate, the per-section
+concurrency tokens behave as configured, and the seeder is safe to run twice. SQLite is used there
+only because it enforces the same constraints without needing an installation; the application
+itself runs on SQL Server.
 
 ## Project structure
 
 | Project | Holds |
 | --- | --- |
 | `src/PropertyManagement.Domain` | Entities, enums, and the business rules. No framework dependencies. |
-| `src/PropertyManagement.Infrastructure` | EF Core context and mappings, migrations, Identity, seeding. |
+| `src/PropertyManagement.Infrastructure` | EF Core context and mappings, migrations, Identity, seeding, services. |
 | `src/PropertyManagement.Web` | Controllers, view models, Razor views, partial views, view components. |
 | `tests/PropertyManagement.Domain.Tests` | Unit tests for the business rules. |
+| `tests/PropertyManagement.Infrastructure.Tests` | Model, query, service and seeding tests against a real database. |
 
 The dependency arrows all point inward: the web project depends on infrastructure and domain,
 infrastructure depends on domain, and the domain depends on nothing. That is what lets the rules be
 tested directly.
 
+## Trying it out
+
+Signed in as a **property manager** you can maintain properties and their units through modals,
+open any application, claim it for review, and record an outcome. Approving issues a twelve-month
+lease, which immediately takes the unit out of the available list.
+
+Signed in as an **applicant** the home page lists the units available today. Applying opens the
+application: one page, one section at a time, with residences managed through a modal and a summary
+that only offers Submit once both sections have been saved. An application that comes back Returned
+becomes editable again so it can be corrected and resubmitted.
+
 ## Design notes
 
-See [DESIGN.md](DESIGN.md) for the reasoning behind the model, how each requirement is met, and the
-trade-offs taken along the way.
+See [DESIGN.md](DESIGN.md) for the reasoning behind the model, how the single-page application and
+the modal contract work, how each requirement is met, and which bonus items were and were not
+attempted.

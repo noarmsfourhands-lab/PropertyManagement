@@ -46,12 +46,15 @@ public static class DependencyInjection
                 identityOptions.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
             })
             .AddEntityFrameworkStores<PropertyManagementDbContext>()
+            .AddClaimsPrincipalFactory<ApplicationUserClaimsPrincipalFactory>()
             .AddDefaultTokenProviders();
 
         services.Configure<SeedOptions>(configuration.GetSection(SeedOptions.SectionName));
         services.AddScoped<DatabaseSeeder>();
 
         services.AddScoped<IPropertyService, PropertyService>();
+        services.AddScoped<IRentalApplicationService, RentalApplicationService>();
+        services.AddScoped<IReviewService, ReviewService>();
 
         // Injected wherever the code needs "now", so tests can supply their own clock.
         services.TryAddSingleton(TimeProvider.System);

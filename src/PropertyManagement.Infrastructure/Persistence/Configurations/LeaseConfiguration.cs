@@ -16,8 +16,8 @@ public class LeaseConfiguration : IEntityTypeConfiguration<Lease>
 
         builder.HasKey(lease => lease.Id);
 
-        builder.Property(lease => lease.StartDate).HasColumnType("date").IsRequired();
-        builder.Property(lease => lease.EndDate).HasColumnType("date").IsRequired();
+        builder.Property(lease => lease.StartDate).IsRequired();
+        builder.Property(lease => lease.EndDate).IsRequired();
         builder.Property(lease => lease.MonthlyRent).HasPrecision(18, 2).IsRequired();
 
 

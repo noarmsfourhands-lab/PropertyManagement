@@ -73,7 +73,7 @@ public class ApplicationWizardTests
     {
         var application = new RentalApplication
         {
-            ApplicantInformationSavedAtUtc = DateTimeOffset.UtcNow,
+            ApplicantInformationSavedAtUtc = DateTime.UtcNow,
             ResidenceHistorySavedAtUtc = null
         };
 
@@ -84,13 +84,13 @@ public class ApplicationWizardTests
     [Fact]
     public void The_summary_is_reached_only_once_both_sections_have_been_saved()
     {
-        var partial = new RentalApplication { ApplicantInformationSavedAtUtc = DateTimeOffset.UtcNow };
+        var partial = new RentalApplication { ApplicantInformationSavedAtUtc = DateTime.UtcNow };
         Assert.False(ApplicationWizard.IsSaved(partial, ApplicationSection.Summary));
 
         var complete = new RentalApplication
         {
-            ApplicantInformationSavedAtUtc = DateTimeOffset.UtcNow,
-            ResidenceHistorySavedAtUtc = DateTimeOffset.UtcNow
+            ApplicantInformationSavedAtUtc = DateTime.UtcNow,
+            ResidenceHistorySavedAtUtc = DateTime.UtcNow
         };
         Assert.True(ApplicationWizard.IsSaved(complete, ApplicationSection.Summary));
     }
