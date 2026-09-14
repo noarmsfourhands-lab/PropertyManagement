@@ -1,0 +1,446 @@
+using Bogus;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using PropertyManagement.Domain.Entities;
+using PropertyManagement.Domain.Enums;
+using PropertyManagement.Domain.Rules;
+using PropertyManagement.Infrastructure.Identity;
+using PropertyManagement.Infrastructure.Persistence;
+
+namespace PropertyManagement.Infrastructure.Seeding;
+
+/// <summary>
+/// Applies migrations and fills an empty database with demo data.
+///
+/// Every step is idempotent: it looks for what it is about to create and skips the work when the
+/// rows are already there, so the app can be restarted any number of times without duplicating
+/// data or failing. Bogus runs from a fixed seed, so a rebuilt database comes back identical.
+/// </summary>
+public class DatabaseSeeder(
+    PropertyManagementDbContext db,
+    UserManager<ApplicationUser> userManager,
+    RoleManager<IdentityRole> roleManager,
+    TimeProvider timeProvider,
+    IOptions<SeedOptions> options,
+    ILogger<DatabaseSeeder> logger)
+{
+    private readonly SeedOptions _options = options.Value;
+
+    /// <summary>Active unit types, plus one retired type to exercise the inactive-lookup rule.</summary>
+    private static readonly (string Name, bool IsActive)[] UnitTypeSeed =
+    [
+        ("Studio", true),
+        ("One Bedroom", true),
+        ("Two Bedroom", true),
+        ("Three Bedroom", true),
+        ("Loft", true),
+        ("Garden Flat", false)
+    ];
+
+    public async Task SeedAsync(CancellationToken cancellationToken = default)
+    {
+        await db.Database.MigrateAsync(cancellationToken);
+
+        if (!_options.Enabled)
+        {
+            logger.LogInformation("Seeding is disabled; migrations applied and nothing was written.");
+            return;
+        }
+
+        Randomizer.Seed = new Random(_options.RandomSeed);
+
+        await SeedRolesAsync();
+
+        var managers = await SeedUsersAsync(UserRole.PropertyManager, _options.PropertyManagerCount, "manager");
+        var applicants = await SeedUsersAsync(UserRole.Applicant, _options.ApplicantCount, "applicant");
+
+        await SeedUnitTypesAsync(cancellationToken);
+        await SeedPropertiesAndUnitsAsync(cancellationToken);
+        await SeedApplicationsAsync(applicants, managers, cancellationToken);
+
+        logger.LogInformation("Database seeding complete.");
+    }
+
+    private async Task SeedRolesAsync()
+    {
+        foreach (var role in UserRole.All)
+        {
+            if (!await roleManager.RoleExistsAsync(role))
+            {
+                await roleManager.CreateAsync(new IdentityRole(role));
+                logger.LogInformation("Created role {Role}.", role);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Creates accounts with predictable addresses (manager1@example.com, applicant1@example.com and
+    /// so on) so the README can hand a reviewer a working login, while names come from Bogus.
+    /// </summary>
+    private async Task<IReadOnlyList<ApplicationUser>> SeedUsersAsync(string role, int count, string prefix)
+    {
+        var faker = new Faker();
+        var users = new List<ApplicationUser>(count);
+
+        for (var index = 1; index <= count; index++)
+        {
+            var email = $"{prefix}{index}@example.com";
+            var existing = await userManager.FindByEmailAsync(email);
+
+            if (existing is not null)
+            {
+                users.Add(existing);
+                continue;
+            }
+
+            var user = new ApplicationUser
+            {
+                UserName = email,
+                Email = email,
+                EmailConfirmed = true,
+                FirstName = faker.Name.FirstName(),
+                LastName = faker.Name.LastName(),
+                PhoneNumber = faker.Phone.PhoneNumber("###-###-####")
+            };
+
+            var created = await userManager.CreateAsync(user, _options.DemoPassword);
+
+            if (!created.Succeeded)
+            {
+                var errors = string.Join("; ", created.Errors.Select(error => error.Description));
+                throw new InvalidOperationException($"Could not create the seeded user {email}: {errors}");
+            }
+
+            await userManager.AddToRoleAsync(user, role);
+            users.Add(user);
+            logger.LogInformation("Created {Role} {Email}.", role, email);
+        }
+
+        return users;
+    }
+
+    private async Task SeedUnitTypesAsync(CancellationToken cancellationToken)
+    {
+        var existing = await db.UnitTypes
+            .Select(unitType => unitType.Name)
+            .ToListAsync(cancellationToken);
+
+        var missing = UnitTypeSeed
+            .Where(seed => !existing.Contains(seed.Name))
+            .Select(seed => new UnitType { Name = seed.Name, IsActive = seed.IsActive })
+            .ToList();
+
+        if (missing.Count == 0)
+        {
+            return;
+        }
+
+        db.UnitTypes.AddRange(missing);
+        await db.SaveChangesAsync(cancellationToken);
+        logger.LogInformation("Seeded {Count} unit types.", missing.Count);
+    }
+
+    private async Task SeedPropertiesAndUnitsAsync(CancellationToken cancellationToken)
+    {
+        if (await db.Properties.AnyAsync(cancellationToken))
+        {
+            return;
+        }
+
+        // Only active types are assigned, matching the rule the UI enforces for new units.
+        var selectableTypeIds = await db.UnitTypes
+            .Where(unitType => unitType.IsActive)
+            .Select(unitType => unitType.Id)
+            .ToListAsync(cancellationToken);
+
+        if (selectableTypeIds.Count == 0)
+        {
+            throw new InvalidOperationException("Unit types must be seeded before properties.");
+        }
+
+        var unitNumber = 0;
+
+        var unitFaker = new Faker<Unit>()
+            .RuleFor(unit => unit.UnitNumber, faker => $"{faker.Random.Int(1, 4)}{++unitNumber:D2}")
+            .RuleFor(unit => unit.Bedrooms, faker => faker.Random.Int(0, 3))
+            .RuleFor(unit => unit.MonthlyRent, faker => Math.Round(faker.Random.Decimal(950, 4200), 2))
+            .RuleFor(unit => unit.UnitTypeId, faker => faker.PickRandom(selectableTypeIds));
+
+        var propertyFaker = new Faker<Property>()
+            .RuleFor(property => property.Name, faker => $"{faker.Address.StreetName()} {faker.PickRandom("Court", "Residences", "Commons", "Place")}")
+            .RuleFor(property => property.AddressLine1, faker => faker.Address.StreetAddress())
+            .RuleFor(property => property.City, faker => faker.Address.City())
+            .RuleFor(property => property.State, faker => faker.Address.StateAbbr())
+            .RuleFor(property => property.PostalCode, faker => faker.Address.ZipCode("#####"));
+
+        var properties = propertyFaker.Generate(_options.PropertyCount);
+        var random = new Randomizer();
+
+        foreach (var property in properties)
+        {
+            unitNumber = 0;
+            var count = random.Int(_options.MinUnitsPerProperty, _options.MaxUnitsPerProperty);
+            property.Units = unitFaker.Generate(count);
+        }
+
+        db.Properties.AddRange(properties);
+        await db.SaveChangesAsync(cancellationToken);
+
+        logger.LogInformation(
+            "Seeded {Properties} properties with {Units} units.",
+            properties.Count,
+            properties.Sum(property => property.Units.Count));
+    }
+
+    /// <summary>
+    /// Creates applications in every status. Each one gets its own unit so that the approved
+    /// applications can hold a live lease without making another seeded unit unavailable.
+    /// </summary>
+    private async Task SeedApplicationsAsync(
+        IReadOnlyList<ApplicationUser> applicants,
+        IReadOnlyList<ApplicationUser> managers,
+        CancellationToken cancellationToken)
+    {
+        if (await db.RentalApplications.AnyAsync(cancellationToken))
+        {
+            return;
+        }
+
+        if (applicants.Count == 0 || managers.Count == 0)
+        {
+            throw new InvalidOperationException("Users must be seeded before applications.");
+        }
+
+        var statuses = Enum.GetValues<ApplicationStatus>();
+        var required = statuses.Length * _options.ApplicationsPerStatus;
+
+        var units = await db.Units
+            .OrderBy(unit => unit.Id)
+            .Take(required)
+            .ToListAsync(cancellationToken);
+
+        if (units.Count < required)
+        {
+            throw new InvalidOperationException(
+                $"Seeding needs {required} units to cover every status but found {units.Count}.");
+        }
+
+        var now = timeProvider.GetUtcNow();
+        var today = DateOnly.FromDateTime(now.UtcDateTime);
+        var faker = new Faker();
+        var cursor = 0;
+
+        foreach (var status in statuses)
+        {
+            for (var copy = 0; copy < _options.ApplicationsPerStatus; copy++)
+            {
+                var unit = units[cursor];
+                var applicant = applicants[cursor % applicants.Count];
+                var manager = managers[cursor % managers.Count];
+                cursor++;
+
+                var application = BuildApplication(unit, applicant, status, now, faker);
+                AddHistory(application, applicant, manager, status, now, faker);
+
+                if (status == ApplicationStatus.Approved)
+                {
+                    // A live lease starting last month, so the unit reads as unavailable today.
+                    var start = today.AddMonths(-1);
+                    application.Lease = new Lease
+                    {
+                        UnitId = unit.Id,
+                        StartDate = start,
+                        EndDate = LeaseTerm.EndDateFor(start),
+                        MonthlyRent = unit.MonthlyRent
+                    };
+                }
+
+                db.RentalApplications.Add(application);
+            }
+        }
+
+        await db.SaveChangesAsync(cancellationToken);
+        logger.LogInformation("Seeded {Count} applications across {Statuses} statuses.", cursor, statuses.Length);
+    }
+
+    private RentalApplication BuildApplication(
+        Unit unit,
+        ApplicationUser applicant,
+        ApplicationStatus status,
+        DateTimeOffset now,
+        Faker faker)
+    {
+        var createdAt = now.AddDays(-faker.Random.Int(10, 90));
+
+        // A brand-new draft has saved nothing yet; every other status has been through both sections.
+        var isUntouchedDraft = status == ApplicationStatus.Draft;
+
+        var application = new RentalApplication
+        {
+            UnitId = unit.Id,
+            Status = status,
+            CreatedAtUtc = createdAt,
+            ApplicantInformation = new ApplicantInformation
+            {
+                FirstName = applicant.FirstName,
+                LastName = applicant.LastName,
+                Phone = faker.Phone.PhoneNumber("###-###-####"),
+                Email = applicant.Email,
+                AddressLine1 = faker.Address.StreetAddress(),
+                City = faker.Address.City(),
+                State = faker.Address.StateAbbr(),
+                PostalCode = faker.Address.ZipCode("#####")
+            },
+            ApplicantInformationSavedAtUtc = isUntouchedDraft ? null : createdAt.AddHours(1),
+            ResidenceHistorySavedAtUtc = isUntouchedDraft ? null : createdAt.AddHours(2),
+            Applicants =
+            [
+                new RentalApplicationApplicant
+                {
+                    ApplicantUserId = applicant.Id,
+                    IsPrimary = true,
+                    AddedAtUtc = createdAt
+                }
+            ]
+        };
+
+        if (!isUntouchedDraft)
+        {
+            application.SubmittedAtUtc = createdAt.AddHours(3);
+            application.Residences = BuildResidences(faker, createdAt);
+        }
+
+        if (status is ApplicationStatus.Approved or ApplicationStatus.Denied or ApplicationStatus.Withdrawn)
+        {
+            application.DecidedAtUtc = createdAt.AddDays(faker.Random.Int(1, 5));
+        }
+
+        if (status == ApplicationStatus.UnderReview)
+        {
+            application.ClaimedAtUtc = createdAt.AddDays(1);
+        }
+
+        return application;
+    }
+
+    private static List<Residence> BuildResidences(Faker faker, DateTimeOffset createdAt)
+    {
+        var count = faker.Random.Int(1, 3);
+        var residences = new List<Residence>(count);
+        var moveOut = DateOnly.FromDateTime(createdAt.UtcDateTime).AddYears(-1);
+
+        for (var index = 0; index < count; index++)
+        {
+            var moveIn = moveOut.AddYears(-faker.Random.Int(1, 3));
+
+            residences.Add(new Residence
+            {
+                AddressLine1 = faker.Address.StreetAddress(),
+                City = faker.Address.City(),
+                State = faker.Address.StateAbbr(),
+                PostalCode = faker.Address.ZipCode("#####"),
+                LandlordName = faker.Name.FullName(),
+                LandlordPhone = faker.Phone.PhoneNumber("###-###-####"),
+                MoveInDate = moveIn,
+                MoveOutDate = moveOut
+            });
+
+            moveOut = moveIn.AddDays(-1);
+        }
+
+        return residences;
+    }
+
+    /// <summary>
+    /// Writes an audit trail that matches how the application actually reached its status, so the
+    /// history panel has something realistic to render for every seeded row.
+    /// </summary>
+    private void AddHistory(
+        RentalApplication application,
+        ApplicationUser applicant,
+        ApplicationUser manager,
+        ApplicationStatus status,
+        DateTimeOffset now,
+        Faker faker)
+    {
+        if (status == ApplicationStatus.Draft)
+        {
+            return;
+        }
+
+        var submittedAt = application.SubmittedAtUtc ?? now;
+
+        application.Events.Add(new ApplicationEvent
+        {
+            FromStatus = ApplicationStatus.Draft,
+            ToStatus = ApplicationStatus.Submitted,
+            ActorUserId = applicant.Id,
+            ActorName = applicant.DisplayName,
+            OccurredAtUtc = submittedAt
+        });
+
+        if (status == ApplicationStatus.Submitted)
+        {
+            return;
+        }
+
+        var decidedAt = application.DecidedAtUtc ?? application.ClaimedAtUtc ?? submittedAt.AddDays(1);
+
+        switch (status)
+        {
+            case ApplicationStatus.UnderReview:
+                application.ClaimedByUserId = manager.Id;
+                application.Events.Add(new ApplicationEvent
+                {
+                    FromStatus = ApplicationStatus.Submitted,
+                    ToStatus = ApplicationStatus.UnderReview,
+                    ActorUserId = manager.Id,
+                    ActorName = manager.DisplayName,
+                    Comment = "Claimed from the review queue.",
+                    OccurredAtUtc = decidedAt
+                });
+                break;
+
+            case ApplicationStatus.Withdrawn:
+                application.Events.Add(new ApplicationEvent
+                {
+                    FromStatus = ApplicationStatus.Submitted,
+                    ToStatus = ApplicationStatus.Withdrawn,
+                    ActorUserId = applicant.Id,
+                    ActorName = applicant.DisplayName,
+                    Comment = "Withdrawn by the applicant.",
+                    OccurredAtUtc = decidedAt
+                });
+                break;
+
+            case ApplicationStatus.Returned:
+            case ApplicationStatus.Approved:
+            case ApplicationStatus.Denied:
+                var outcome = status switch
+                {
+                    ApplicationStatus.Returned => ReviewOutcome.Return,
+                    ApplicationStatus.Approved => ReviewOutcome.Approve,
+                    _ => ReviewOutcome.Deny
+                };
+
+                application.Events.Add(new ApplicationEvent
+                {
+                    FromStatus = ApplicationStatus.Submitted,
+                    ToStatus = status,
+                    Outcome = outcome,
+                    ActorUserId = manager.Id,
+                    ActorName = manager.DisplayName,
+                    Comment = ReviewRules.RequiresComment(outcome)
+                        ? faker.PickRandom(
+                            "Residence history is missing a landlord phone number.",
+                            "Move-out date overlaps the previous address.",
+                            "Reported income does not meet the rent threshold.")
+                        : null,
+                    OccurredAtUtc = decidedAt
+                });
+                break;
+        }
+    }
+}
