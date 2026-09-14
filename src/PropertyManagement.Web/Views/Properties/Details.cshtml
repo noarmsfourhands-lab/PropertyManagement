@@ -1,0 +1,29 @@
+@model PropertyManagement.Web.ViewModels.Properties.PropertyDetailsViewModel
+@{
+    ViewData["Title"] = Model.Property.Name;
+}
+
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a asp-action="Index">Properties</a></li>
+        <li class="breadcrumb-item active" aria-current="page">@Model.Property.Name</li>
+    </ol>
+</nav>
+
+<div class="d-flex justify-content-between align-items-start mb-3">
+    <div>
+        <h1 class="h3 mb-1">@Model.Property.Name</h1>
+        <p class="text-muted mb-0">
+            @Model.Property.AddressLine1@(string.IsNullOrWhiteSpace(Model.Property.AddressLine2) ? "" : ", " + Model.Property.AddressLine2),
+            @Model.Property.City @Model.Property.State @Model.Property.PostalCode
+        </p>
+    </div>
+    <button type="button" class="btn btn-primary"
+            data-modal-url="@Url.Action("UnitForm", new { id = 0, propertyId = Model.Property.Id })">
+        Add unit
+    </button>
+</div>
+
+<div id="unit-list">
+    <partial name="_UnitList" model="Model" />
+</div>

@@ -121,10 +121,11 @@ their unit reads as unavailable today, which exercises the availability rule on 
 | Inactive unit type enforced on the server | `UnitTypeSelection` | Done |
 | Review outcome and comment requirement | `ReviewRules` | Done |
 | Section order for the single-page application | `ApplicationWizard` | Done |
-| Sign up, log in, log out with role choice | `AccountController` and its views | To build |
-| Properties and units maintained through modals | `PropertiesController`, `UnitsController` | To build |
-| Partial views and view components | `Views/Shared`, `ViewComponents` | To build |
-| Modal validation re-render in place | Controller actions returning the same partial | To build |
+| Sign up, log in, log out with role choice | `AccountController` and its views | Done |
+| Properties and units maintained through modals | `PropertiesController` | Done |
+| Partial views and view components | `Views/Properties/_*`, `AvailableUnitsViewComponent` | Done |
+| Modal validation re-render in place | `ModalController`, `wwwroot/js/modal-forms.js` | Done |
+| Available units browsing | `AvailableUnitsViewComponent`, filtered in the database | Done |
 | Single-page application wizard, one form, one action | `RentalApplicationsController` | To build |
 | Residence add, edit, remove through a modal | `ResidencesController` | To build |
 | Review modal and status history panel | `ReviewController`, history view component | To build |
@@ -142,3 +143,31 @@ the schema.
 | 3. Manager-only notes | `PropertyManagerNote` |
 | 4. Save a section that fails validation | Section save timestamps are separate from validity |
 | 5. Multiple applicants and stale-save rejection | `RentalApplicationApplicant`, per-section concurrency tokens |
+
+## The modal contract
+
+Requirement 1b asks for modals populated from partial views, re-rendering in place on a validation
+failure and refreshing only the affected region on success. That is one small contract between
+`ModalController` and `wwwroot/js/modal-forms.js`:
+
+| Direction | Request | Response |
+| --- | --- | --- |
+| Opening | `GET` the modal action | the partial view for the modal body |
+| Rejected | `POST` the form | `422` and the **same** partial, carrying the messages |
+| Accepted | `POST` the form | `200` and `{ refreshUrl, target, message }` |
+
+Returning the identical partial from both the GET and the failed POST is the part that matters:
+there is no second copy of the form to keep in step, so the modal cannot drift out of agreement
+with itself. The success payload names a region rather than reloading the page, so a manager adding
+a unit sees the unit table update while the rest of the screen stays put.
+
+A page opts an element into the pattern with `data-modal-url`, and a form opts in with
+`data-modal-form`. Nothing else on the page needs to know the mechanism exists, which is what keeps
+this from turning into a front-end framework.
+
+## What is not built yet
+
+The rental application wizard, the residence modal, the review modal and history, and the filtered
+application list are not implemented. The model, the rules and the tests they need are in place,
+and the modal contract above is the pattern each of them follows. The coverage table marks exactly
+which rows are done.

@@ -1,0 +1,23 @@
+@model Unit
+
+<form asp-action="DeleteUnit" asp-route-id="@Model.Id" method="post"
+      data-modal-form
+      data-refresh-target="#unit-list"
+      data-refresh-url="@Url.Action("UnitListPartial", new { id = Model.PropertyId })">
+    @Html.AntiForgeryToken()
+
+    <div class="modal-header">
+        <h5 class="modal-title">Remove unit</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+    </div>
+
+    <div class="modal-body">
+        <div asp-validation-summary="ModelOnly" class="text-danger small mb-3"></div>
+        <p class="mb-0">Remove unit <strong>@Model.UnitNumber</strong>? This cannot be undone.</p>
+    </div>
+
+    <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="submit" class="btn btn-danger">Remove</button>
+    </div>
+</form>

@@ -1,0 +1,32 @@
+@*
+    Sign-in state for the navigation bar. A partial rather than layout markup so the layout
+    stays about structure and this stays about identity.
+*@
+<ul class="navbar-nav">
+    @if (User.Identity?.IsAuthenticated == true)
+    {
+        <li class="nav-item d-flex align-items-center me-3">
+            <span class="navbar-text small">
+                @User.Identity.Name
+                @if (User.IsInRole(UserRole.PropertyManager))
+                {
+                    <span class="badge text-bg-secondary ms-1">Property manager</span>
+                }
+                else if (User.IsInRole(UserRole.Applicant))
+                {
+                    <span class="badge text-bg-secondary ms-1">Applicant</span>
+                }
+            </span>
+        </li>
+        <li class="nav-item">
+            <form asp-controller="Account" asp-action="Logout" method="post" class="d-inline">
+                <button type="submit" class="btn btn-link nav-link">Sign out</button>
+            </form>
+        </li>
+    }
+    else
+    {
+        <li class="nav-item"><a class="nav-link" asp-controller="Account" asp-action="Register">Sign up</a></li>
+        <li class="nav-item"><a class="nav-link" asp-controller="Account" asp-action="Login">Sign in</a></li>
+    }
+</ul>

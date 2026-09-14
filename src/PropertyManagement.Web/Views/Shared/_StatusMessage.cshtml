@@ -1,0 +1,22 @@
+@*
+    Renders the one-off message left in TempData after a redirect, so an action can report what
+    it did without every view repeating the markup.
+*@
+@{
+    var success = TempData["StatusMessage"] as string;
+    var error = TempData["ErrorMessage"] as string;
+}
+@if (!string.IsNullOrWhiteSpace(success))
+{
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+        @success
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+}
+@if (!string.IsNullOrWhiteSpace(error))
+{
+    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+        @error
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+}

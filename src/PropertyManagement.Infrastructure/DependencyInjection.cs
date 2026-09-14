@@ -6,6 +6,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using PropertyManagement.Infrastructure.Identity;
 using PropertyManagement.Infrastructure.Persistence;
 using PropertyManagement.Infrastructure.Seeding;
+using PropertyManagement.Infrastructure.Services;
 
 namespace PropertyManagement.Infrastructure;
 
@@ -49,6 +50,8 @@ public static class DependencyInjection
 
         services.Configure<SeedOptions>(configuration.GetSection(SeedOptions.SectionName));
         services.AddScoped<DatabaseSeeder>();
+
+        services.AddScoped<IPropertyService, PropertyService>();
 
         // Injected wherever the code needs "now", so tests can supply their own clock.
         services.TryAddSingleton(TimeProvider.System);

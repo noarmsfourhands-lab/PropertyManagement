@@ -1,0 +1,56 @@
+@model PropertyManagement.Web.ViewComponents.AvailableUnitsModel
+@*
+    The view component's own view. Convention puts it at
+    Views/Shared/Components/<ComponentName>/Default.cshtml, which is what lets any page invoke
+    the component without knowing where its markup lives.
+*@
+
+<div class="card shadow-sm">
+    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+        <span class="fw-semibold">Available units</span>
+        <span class="badge text-bg-secondary">@Model.TotalAvailable available</span>
+    </div>
+
+    @if (Model.Units.Count == 0)
+    {
+        <div class="card-body text-center text-muted py-5">
+            <p class="mb-0">No units are available at the moment. Check back soon.</p>
+        </div>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th scope="col">Property</th>
+                        <th scope="col">Unit</th>
+                        <th scope="col">Type</th>
+                        <th scope="col" class="text-end">Bedrooms</th>
+                        <th scope="col" class="text-end">Monthly rent</th>
+                    </tr>
+                </thead>
+                <tbody>
+                @foreach (var unit in Model.Units)
+                {
+                    <tr>
+                        <td>@unit.Property?.Name</td>
+                        <td class="fw-semibold">@unit.UnitNumber</td>
+                        <td>@unit.UnitType?.Name</td>
+                        <td class="text-end">@unit.Bedrooms</td>
+                        <td class="text-end">@unit.MonthlyRent.ToString("C0")</td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+
+        <div class="card-footer bg-white text-muted small">
+            Availability as of @Model.AsOf.ToString("d MMMM yyyy").
+            @if (Model.HasMore)
+            {
+                <span>Showing @Model.Units.Count of @Model.TotalAvailable.</span>
+            }
+        </div>
+    }
+</div>

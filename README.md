@@ -15,6 +15,22 @@ Server, and ASP.NET Identity. No single-page application framework is used.
 | SQL Server | SQL Server Express, LocalDB, or a full instance |
 | `dotnet-ef` CLI | 10.0.x |
 
+### SQL Server is not optional
+
+The application refuses to start without a reachable SQL Server instance, and says so plainly in
+the log rather than printing a provider stack trace. If no instance is installed yet, either will do:
+
+- **SQL Server Express** from the Microsoft download page. During setup, include the **LocalDB**
+  feature to get the `(localdb)\MSSQLLocalDB` instance the default connection string points at.
+- **LocalDB on its own**, which ships with the SQL Server Express installer and with the Visual
+  Studio *Data storage and processing* workload.
+
+Confirm the instance is there before running:
+
+```bash
+sqllocaldb info
+```
+
 Install the EF Core tooling if it is not already present:
 
 ```bash

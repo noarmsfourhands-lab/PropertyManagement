@@ -1,0 +1,26 @@
+@model Property
+
+<form asp-action="Delete" asp-route-id="@Model.Id" method="post"
+      data-modal-form
+      data-refresh-target="#property-list"
+      data-refresh-url="@Url.Action("ListPartial")">
+    @Html.AntiForgeryToken()
+
+    <div class="modal-header">
+        <h5 class="modal-title">Remove property</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+    </div>
+
+    <div class="modal-body">
+        <div asp-validation-summary="ModelOnly" class="text-danger small mb-3"></div>
+        <p class="mb-1">Remove <strong>@Model.Name</strong>?</p>
+        <p class="text-muted small mb-0">
+            Its @Model.Units.Count unit(s) are removed with it. This cannot be undone.
+        </p>
+    </div>
+
+    <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="submit" class="btn btn-danger">Remove</button>
+    </div>
+</form>

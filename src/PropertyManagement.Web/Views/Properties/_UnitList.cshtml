@@ -1,0 +1,56 @@
+@model PropertyManagement.Web.ViewModels.Properties.PropertyDetailsViewModel
+
+@if (Model.Units.Count == 0)
+{
+    <div class="card shadow-sm">
+        <div class="card-body text-center text-muted py-5">
+            <p class="mb-0">No units in this property yet.</p>
+        </div>
+    </div>
+}
+else
+{
+    <div class="card shadow-sm">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th scope="col">Unit</th>
+                        <th scope="col">Type</th>
+                        <th scope="col" class="text-end">Bedrooms</th>
+                        <th scope="col" class="text-end">Monthly rent</th>
+                        <th scope="col" class="text-end">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                @foreach (var unit in Model.Units)
+                {
+                    <tr>
+                        <td class="fw-semibold">@unit.UnitNumber</td>
+                        <td>
+                            @unit.UnitType?.Name
+                            @* A retired type still displays on the unit that already uses it. *@
+                            @if (unit.UnitType is { IsActive: false })
+                            {
+                                <span class="badge text-bg-warning ms-1">Retired</span>
+                            }
+                        </td>
+                        <td class="text-end">@unit.Bedrooms</td>
+                        <td class="text-end">@unit.MonthlyRent.ToString("C0")</td>
+                        <td class="text-end">
+                            <button type="button" class="btn btn-sm btn-outline-secondary"
+                                    data-modal-url="@Url.Action("UnitForm", new { id = unit.Id, propertyId = unit.PropertyId })">
+                                Edit
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-danger"
+                                    data-modal-url="@Url.Action("ConfirmDeleteUnit", new { id = unit.Id })">
+                                Remove
+                            </button>
+                        </td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
