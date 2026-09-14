@@ -23,13 +23,13 @@ public class AvailableUnitsViewComponent(IPropertyService properties, TimeProvid
     {
         var today = DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime);
 
-        // Availability is decided in the database; only the page-sized slice is materialised.
-        var available = await properties.GetAvailableUnitsAsync(today);
+        // Availability is decided in the database, and only the requested slice is materialised.
+        var available = await properties.GetAvailableUnitsAsync(today, maximum);
 
         var model = new AvailableUnitsModel
         {
-            Units = available.Take(maximum).ToList(),
-            TotalAvailable = available.Count,
+            Units = available.Units,
+            TotalAvailable = available.TotalCount,
             AsOf = today
         };
 

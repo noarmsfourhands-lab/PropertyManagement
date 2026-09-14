@@ -167,7 +167,32 @@ this from turning into a front-end framework.
 
 ## What is not built yet
 
-The rental application wizard, the residence modal, the review modal and history, and the filtered
-application list are not implemented. The model, the rules and the tests they need are in place,
-and the modal contract above is the pattern each of them follows. The coverage table marks exactly
-which rows are done.
+Four screens remain. The model, the rules and the tests each of them needs are already in place,
+and every one follows a pattern the code already demonstrates.
+
+**The application wizard.** One page, one view model, one action. Each section renders through its
+own partial, and the submit button's `name`/`value` tells the action which button was pressed:
+Continue validates the current section and saves it only when valid, Back moves without saving,
+Submit is offered from the Summary. `ApplicationWizard.Next` and `.Previous` already answer where
+each button leads, and `ApplicationWizard.IsSaved` answers whether Submit may appear.
+`ApplicationWorkflow.CanEdit` decides whether a section partial renders editable or read-only, and
+`CanSave` rejects a post that is not allowed regardless of what the page offered.
+
+**The residence modal.** The same contract as the unit modal: a GET action returning
+`_ResidenceForm`, a POST returning 422 with that same partial on failure, and a success payload
+pointing at the residence list region. `PropertiesController` is the worked example.
+
+**The review modal and history.** A manager opens a submitted application, picks Approve, Return or
+Deny and writes a comment. `ReviewRules.ValidateComment` is the guard for the comment requirement
+and `ReviewRules.ResultingStatus` maps the outcome to a status; `ApplicationWorkflow.CanReview`
+decides whether this manager may act. Approval issues the lease through `LeaseTerm.Issue` after
+re-checking availability, and relies on the unique index for the race. The history panel is a
+natural view component: it has its own query and appears on a page that is about something else.
+
+**The application list.** Filter by status and property over `IQueryable` so the work happens in
+the database, then apply the ownership filter: applicants see only applications their user id
+appears against in `RentalApplicationApplicants`, managers see all. The indexes for exactly these
+filters are already in the schema.
+
+The coverage table above marks precisely which rows are done, so nothing here is implied to be
+finished that is not.

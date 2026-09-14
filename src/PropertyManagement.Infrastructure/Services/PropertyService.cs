@@ -16,6 +16,9 @@ public record PropertyInput(
     string State,
     string PostalCode);
 
+/// <summary>A page of units together with the total the filter matched.</summary>
+public record UnitPage(IReadOnlyList<Unit> Units, int TotalCount);
+
 /// <summary>Input for creating or updating a unit. Id is zero when creating.</summary>
 public record UnitInput(
     int Id,
@@ -37,8 +40,9 @@ public interface IPropertyService
         int? currentUnitTypeId,
         CancellationToken cancellationToken = default);
 
-    Task<IReadOnlyList<Unit>> GetAvailableUnitsAsync(
+    Task<UnitPage> GetAvailableUnitsAsync(
         DateOnly asOf,
+        int take,
         CancellationToken cancellationToken = default);
 
     Task<DomainResult> SavePropertyAsync(PropertyInput input, CancellationToken cancellationToken = default);
@@ -97,18 +101,33 @@ public class PropertyService(PropertyManagementDbContext db) : IPropertyService
     /// Units with no lease term covering <paramref name="asOf"/>. The availability rule is
     /// expressed as a query so the filtering happens in the database rather than in memory;
     /// <see cref="LeaseTerm.HasActiveLease"/> is the same rule stated for objects already loaded.
+    ///
+    /// The count and the page are two queries against the same filter, so showing "8 of 37" never
+    /// means loading 37 rows to display 8.
     /// </summary>
-    public async Task<IReadOnlyList<Unit>> GetAvailableUnitsAsync(
+    public async Task<UnitPage> GetAvailableUnitsAsync(
         DateOnly asOf,
-        CancellationToken cancellationToken = default) =>
-        await db.Units
+        int take,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(take);
+
+        var available = db.Units
             .AsNoTracking()
+            .Where(unit => !unit.Leases.Any(lease => lease.StartDate <= asOf && asOf <= lease.EndDate));
+
+        var total = await available.CountAsync(cancellationToken);
+
+        var page = await available
             .Include(unit => unit.Property)
             .Include(unit => unit.UnitType)
-            .Where(unit => !unit.Leases.Any(lease => lease.StartDate <= asOf && asOf <= lease.EndDate))
             .OrderBy(unit => unit.Property.Name)
             .ThenBy(unit => unit.UnitNumber)
+            .Take(take)
             .ToListAsync(cancellationToken);
+
+        return new UnitPage(page, total);
+    }
 
     public async Task<DomainResult> SavePropertyAsync(
         PropertyInput input,
