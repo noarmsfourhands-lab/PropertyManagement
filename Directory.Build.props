@@ -1,0 +1,29 @@
+<Project>
+
+  <!--
+    Settings every project shares, in one place rather than copied into each csproj. A project
+    added later picks them up without anyone remembering to.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <!--
+      The solution builds with no warnings, and this keeps it that way: a warning introduced later
+      fails the build rather than scrolling past. Anything genuinely worth allowing is silenced
+      deliberately, at the narrowest scope, with a comment saying why.
+
+      The analysis level is the default set rather than the recommended one. The extra rules in
+      "recommended" are mostly about allocation in hot paths, and the code they flag here is a
+      seeder that runs once at start-up, where the ceremony would cost readability and buy nothing.
+    -->
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <AnalysisLevel>latest</AnalysisLevel>
+  </PropertyGroup>
+
+</Project>

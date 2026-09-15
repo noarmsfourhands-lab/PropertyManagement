@@ -34,12 +34,12 @@ public class PropertyManagementDbContext(DbContextOptions<PropertyManagementDbCo
     /// Applied to every DateTime in the model rather than property by property, so a timestamp
     /// added later cannot quietly miss out on being normalised to UTC.
     /// </summary>
-    protected override void ConfigureConventions(ModelConfigurationBuilder builder)
+    protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {
-        base.ConfigureConventions(builder);
+        base.ConfigureConventions(configurationBuilder);
 
-        builder.Properties<DateTime>().HaveConversion<UtcDateTimeConverter>();
-        builder.Properties<DateTime?>().HaveConversion<NullableUtcDateTimeConverter>();
+        configurationBuilder.Properties<DateTime>().HaveConversion<UtcDateTimeConverter>();
+        configurationBuilder.Properties<DateTime?>().HaveConversion<NullableUtcDateTimeConverter>();
     }
 
     protected override void OnModelCreating(ModelBuilder builder)

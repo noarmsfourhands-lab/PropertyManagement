@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using PropertyManagement.Domain.Entities;
 using PropertyManagement.Domain.Enums;
@@ -27,31 +28,21 @@ public class RentalApplicationsController(
     // ---------------------------------------------------------------- List
 
     /// <summary>
-    /// Applications filtered by status and property. Applicants see their own; property managers
-    /// see all of them. The filtering, the count and the paging all happen in the database.
+    /// The applications page. It renders the grid's shell and its starting filters; the rows
+    /// themselves are fetched by the grid from the JSON endpoint, so this deliberately does not
+    /// query for them. Filtering, sorting, counting and paging all happen in the database there.
     /// </summary>
     [HttpGet]
     public async Task<IActionResult> Index(
         ApplicationStatus? status,
         int? propertyId,
-        int page = 1,
         CancellationToken cancellationToken = default)
     {
-        var isManager = User.IsPropertyManager();
-        var filter = new ApplicationListFilter(status, propertyId, page);
-
-        var results = await applications.ListAsync(
-            filter,
-            isManager ? null : User.GetUserId(),
-            cancellationToken);
-
         var model = new ApplicationListViewModel
         {
             Status = status,
             PropertyId = propertyId,
-            Page = results.Page,
-            Results = results,
-            ShowsEveryApplicant = isManager
+            ShowsEveryApplicant = User.IsPropertyManager()
         };
 
         model.SetChoices(await applications.GetFilterPropertiesAsync(cancellationToken));
@@ -61,16 +52,15 @@ public class RentalApplicationsController(
 
     // ---------------------------------------------------------------- Starting an application
 
-    /// <summary>Starts, or reopens, this applicant's application for a unit.</summary>
+    /// <summary>
+    /// Starts, or reopens, this applicant's application for a unit. Property managers do not apply
+    /// for units, which the policy states rather than an inline role check.
+    /// </summary>
     [HttpPost]
+    [Authorize(Policy = AuthorizationPolicies.Applicant)]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Start(int unitId, CancellationToken cancellationToken)
     {
-        if (!User.IsApplicant())
-        {
-            return Forbid();
-        }
-
         var result = await applications.StartAsync(unitId, User.ToActor(), Today, cancellationToken);
 
         if (result.Failed)

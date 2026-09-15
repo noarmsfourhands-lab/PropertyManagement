@@ -116,18 +116,12 @@ public class ApplicationListViewModel
 
     public int? PropertyId { get; set; }
 
-    public int Page { get; set; } = 1;
-
-    public required ApplicationListPage Results { get; init; }
-
     public IEnumerable<SelectListItem> StatusChoices { get; set; } = [];
 
     public IEnumerable<SelectListItem> PropertyChoices { get; set; } = [];
 
     /// <summary>True for a property manager, who sees every application rather than only their own.</summary>
     public bool ShowsEveryApplicant { get; init; }
-
-    public ApplicationListFilter ToFilter() => new(Status, PropertyId, Page);
 
     /// <summary>
     /// Describes this list to the generic grid component: where to fetch rows, which columns to

@@ -74,6 +74,17 @@ it is read back from hidden fields, so a crafted post cannot grant itself an edi
 Summary`. The Summary therefore renders the very same section partials as read-only text without
 asking for a different mode, which is why the editable and read-only views cannot drift apart.
 
+### A seventh status
+
+Requirement 5b names six statuses: Draft, Submitted, Returned, Approved, Denied and Withdrawn.
+There is a seventh, `UnderReview`, and it exists only because bonus two asks for a review queue in
+which "a property manager claims a submitted application (Under Review) before completing it".
+
+It behaves as a sub-state of Submitted rather than a new stage: an application enters it only by
+being claimed, returns to Submitted when released, and is reviewable from either. Every transition
+the six-status lifecycle allows from Submitted is allowed from Under Review too. Dropping bonus two
+would mean deleting the value and the two transitions that reach it, and nothing else.
+
 ## The modal contract
 
 Requirement 1b asks for modals populated from partial views, re-rendering in place on a validation
