@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc.Rendering;
 using PropertyManagement.Domain.Entities;
 using PropertyManagement.Domain.Enums;
 using PropertyManagement.Infrastructure.Services;
+using PropertyManagement.Web.ViewComponents;
 
 namespace PropertyManagement.Web.ViewModels.Applications;
 
@@ -127,6 +128,45 @@ public class ApplicationListViewModel
     public bool ShowsEveryApplicant { get; init; }
 
     public ApplicationListFilter ToFilter() => new(Status, PropertyId, Page);
+
+    /// <summary>
+    /// Describes this list to the generic grid component: where to fetch rows, which columns to
+    /// draw, and what may be filtered. The grid learns nothing about applications from this beyond
+    /// the field names on the rows the endpoint returns.
+    /// </summary>
+    public DataGridModel ToGrid(string endpoint) => new()
+    {
+        Id = "applications-grid",
+        Endpoint = endpoint,
+        PageSize = 20,
+        Sort = nameof(ApplicationSort.Submitted),
+        Descending = true,
+        EmptyMessage = "No applications match these filters.",
+        Columns =
+        [
+            new DataGridColumn("PropertyName", "Property", Sort: nameof(ApplicationSort.Property)),
+            new DataGridColumn("UnitNumber", "Unit", Sort: nameof(ApplicationSort.Unit)),
+            new DataGridColumn("ApplicantName", "Applicant", Sort: nameof(ApplicationSort.Applicant)),
+            new DataGridColumn(
+                "StatusLabel",
+                "Status",
+                Sort: nameof(ApplicationSort.Status),
+                Render: DataGridRender.Badge,
+                ClassField: "StatusClass"),
+            new DataGridColumn("Submitted", "Submitted", Sort: nameof(ApplicationSort.Submitted)),
+            new DataGridColumn(
+                "DetailUrl",
+                string.Empty,
+                Render: DataGridRender.Link,
+                Align: DataGridAlign.End,
+                LinkText: "Open")
+        ],
+        Filters =
+        [
+            new DataGridFilter("status", "Status", "Any status", [.. StatusChoices], Status is null ? null : ((int)Status).ToString()),
+            new DataGridFilter("propertyId", "Property", "Any property", [.. PropertyChoices], PropertyId?.ToString())
+        ]
+    };
 
     public void SetChoices(IReadOnlyList<Property> properties)
     {

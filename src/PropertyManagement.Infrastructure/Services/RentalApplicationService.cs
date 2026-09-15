@@ -39,12 +39,27 @@ public record ResidenceInput(
     DateOnly MoveInDate,
     DateOnly? MoveOutDate);
 
-/// <summary>What the list is filtered and paged by. Both filters are optional.</summary>
+/// <summary>
+/// The columns the list can be ordered by. An enum rather than a column name from the request, so
+/// the sort can never become a way to inject a fragment of SQL or to order by something private.
+/// </summary>
+public enum ApplicationSort
+{
+    Submitted = 0,
+    Status = 1,
+    Property = 2,
+    Unit = 3,
+    Applicant = 4
+}
+
+/// <summary>What the list is filtered, sorted and paged by. Both filters are optional.</summary>
 public record ApplicationListFilter(
     ApplicationStatus? Status = null,
     int? PropertyId = null,
     int Page = 1,
-    int PageSize = 20);
+    int PageSize = 20,
+    ApplicationSort Sort = ApplicationSort.Submitted,
+    bool Descending = true);
 
 /// <summary>One row of the list. Projected in the database; no entity graph is loaded.</summary>
 public record ApplicationListRow(
@@ -524,8 +539,8 @@ public class RentalApplicationService(PropertyManagementDbContext db, TimeProvid
         var page = Math.Max(filter.Page, 1);
         var pageSize = Math.Clamp(filter.PageSize, 1, 100);
 
-        var rows = await query
-            .OrderByDescending(application => application.SubmittedAtUtc ?? application.CreatedAtUtc)
+        var rows = await OrderBy(query, filter.Sort, filter.Descending)
+            // A stable tiebreak, so a row cannot drift between pages when the sort key ties.
             .ThenByDescending(application => application.Id)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
@@ -550,6 +565,38 @@ public class RentalApplicationService(PropertyManagementDbContext db, TimeProvid
             .AsNoTracking()
             .OrderBy(property => property.Name)
             .ToListAsync(cancellationToken);
+
+    /// <summary>
+    /// Applies the chosen ordering to the query rather than to the results, so the database does
+    /// the sorting and paging can be trusted to return the right slice.
+    /// </summary>
+    private static IOrderedQueryable<RentalApplication> OrderBy(
+        IQueryable<RentalApplication> query,
+        ApplicationSort sort,
+        bool descending) => sort switch
+    {
+        ApplicationSort.Status => descending
+            ? query.OrderByDescending(application => application.Status)
+            : query.OrderBy(application => application.Status),
+
+        ApplicationSort.Property => descending
+            ? query.OrderByDescending(application => application.Unit.Property.Name)
+            : query.OrderBy(application => application.Unit.Property.Name),
+
+        ApplicationSort.Unit => descending
+            ? query.OrderByDescending(application => application.Unit.UnitNumber)
+            : query.OrderBy(application => application.Unit.UnitNumber),
+
+        ApplicationSort.Applicant => descending
+            ? query.OrderByDescending(application => application.ApplicantInformation.LastName)
+            : query.OrderBy(application => application.ApplicantInformation.LastName),
+
+        // Submitted, and anything unrecognised, falls back to when the application was last
+        // moved on, which is the order a queue is worked in.
+        _ => descending
+            ? query.OrderByDescending(application => application.SubmittedAtUtc ?? application.CreatedAtUtc)
+            : query.OrderBy(application => application.SubmittedAtUtc ?? application.CreatedAtUtc)
+    };
 
     private static bool IsApplicantOn(RentalApplication application, string userId) =>
         application.Applicants.Any(link => link.ApplicantUserId == userId);

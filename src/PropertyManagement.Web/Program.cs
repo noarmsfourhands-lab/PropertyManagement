@@ -24,6 +24,10 @@ builder.Services.AddControllersWithViews(options =>
     options.Filters.Add(new AuthorizeFilter());
 });
 
+// Describes the JSON endpoints the application exposes. The XML comments on those endpoints are
+// picked up here, which is why the web project generates a documentation file.
+builder.Services.AddOpenApi();
+
 builder.Services.ConfigureApplicationCookie(options =>
 {
     options.LoginPath = "/Account/Login";
@@ -31,6 +35,33 @@ builder.Services.ConfigureApplicationCookie(options =>
     options.AccessDeniedPath = "/Account/AccessDenied";
     options.ExpireTimeSpan = TimeSpan.FromHours(8);
     options.SlidingExpiration = true;
+
+    // A page that needs a sign-in should go to the sign-in page. A JSON request should be told
+    // plainly that it is unauthorised, because redirecting it would hand a caller expecting data
+    // a page of HTML and a success status.
+    options.Events.OnRedirectToLogin = context =>
+    {
+        if (context.Request.Path.StartsWithSegments("/api"))
+        {
+            context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+            return Task.CompletedTask;
+        }
+
+        context.Response.Redirect(context.RedirectUri);
+        return Task.CompletedTask;
+    };
+
+    options.Events.OnRedirectToAccessDenied = context =>
+    {
+        if (context.Request.Path.StartsWithSegments("/api"))
+        {
+            context.Response.StatusCode = StatusCodes.Status403Forbidden;
+            return Task.CompletedTask;
+        }
+
+        context.Response.Redirect(context.RedirectUri);
+        return Task.CompletedTask;
+    };
 });
 
 var app = builder.Build();
@@ -58,7 +89,12 @@ await using (var scope = app.Services.CreateAsyncScope())
     }
 }
 
-if (!app.Environment.IsDevelopment())
+if (app.Environment.IsDevelopment())
+{
+    // The OpenAPI document, served at /openapi/v1.json while developing.
+    app.MapOpenApi().AllowAnonymous();
+}
+else
 {
     app.UseExceptionHandler("/Home/Error");
     app.UseHsts();
@@ -71,6 +107,9 @@ app.UseRouting();
 
 app.UseAuthentication();
 app.UseAuthorization();
+
+// Attribute-routed controllers, which is how the JSON endpoints are reached.
+app.MapControllers();
 
 app.MapControllerRoute(
     name: "default",

@@ -1,0 +1,102 @@
+@model PropertyManagement.Web.ViewComponents.DataGridModel
+@using System.Text.Json
+@using System.Text.Json.Serialization
+@using PropertyManagement.Web.ViewComponents
+@*
+    The server renders the shell; data-grid.js fills in the rows from the JSON endpoint and takes
+    over sorting, filtering and paging. The column definitions travel to the browser as data, so
+    the script needs no knowledge of what is being listed.
+*@
+@{
+    var columnData = JsonSerializer.Serialize(
+        Model.Columns.Select(column => new
+        {
+            field = JsonNamingPolicy.CamelCase.ConvertName(column.Field),
+            align = column.Align.ToString(),
+            render = column.Render.ToString(),
+            classField = column.ClassField is null
+                ? null
+                : JsonNamingPolicy.CamelCase.ConvertName(column.ClassField),
+            linkText = column.LinkText
+        }),
+        new JsonSerializerOptions { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull });
+}
+
+<div class="card shadow-sm"
+     data-grid
+     id="@Model.Id"
+     data-endpoint="@Model.Endpoint"
+     data-page-size="@Model.PageSize"
+     data-sort="@Model.Sort"
+     data-descending="@Model.Descending.ToString().ToLowerInvariant()"
+     data-empty-message="@Model.EmptyMessage"
+     data-loading-message="@Model.LoadingMessage"
+     data-columns="@columnData">
+
+    @if (Model.Filters.Count > 0)
+    {
+        <div class="card-body border-bottom py-3">
+            <div class="row g-2 align-items-end">
+                @foreach (var filter in Model.Filters)
+                {
+                    <div class="col-sm-4">
+                        <label class="form-label small mb-1" for="@(Model.Id)-@filter.Name">@filter.Label</label>
+                        <select class="form-select form-select-sm"
+                                id="@(Model.Id)-@filter.Name"
+                                data-grid-filter="@filter.Name">
+                            <option value="">@filter.AnyLabel</option>
+                            @foreach (var option in filter.Options)
+                            {
+                                <option value="@option.Value" selected="@(option.Value == filter.Value)">
+                                    @option.Text
+                                </option>
+                            }
+                        </select>
+                    </div>
+                }
+                <div class="col-sm-4">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" data-grid-clear>
+                        Clear filters
+                    </button>
+                </div>
+            </div>
+        </div>
+    }
+
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0" hidden>
+            <thead class="table-light">
+                <tr>
+                @foreach (var column in Model.Columns)
+                {
+                    <th scope="col"
+                        class="@(column.Align == DataGridAlign.End ? "text-end" : null)"
+                        aria-sort="none"
+                        @(column.Sortable ? "data-grid-sort=" + column.Sort : null)
+                        style="@(column.Sortable ? "cursor: pointer" : null)">
+                        @column.Header
+                        @if (column.Sortable)
+                        {
+                            <span class="text-muted small ms-1" data-grid-arrow></span>
+                        }
+                    </th>
+                }
+                </tr>
+            </thead>
+            <tbody data-grid-body></tbody>
+        </table>
+    </div>
+
+    @* One region for "loading", "empty" and "it went wrong", because only ever one applies. *@
+    <div class="card-body text-center text-muted py-5" data-grid-status role="status" aria-live="polite">
+        @Model.LoadingMessage
+    </div>
+
+    <div class="card-footer bg-white d-flex justify-content-between align-items-center" data-grid-pager hidden>
+        <span class="text-muted small" data-grid-summary></span>
+        <div class="btn-group btn-group-sm">
+            <button type="button" class="btn btn-outline-secondary" data-grid-previous>Previous</button>
+            <button type="button" class="btn btn-outline-secondary" data-grid-next>Next</button>
+        </div>
+    </div>
+</div>
