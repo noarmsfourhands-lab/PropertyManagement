@@ -128,3 +128,26 @@ public class PropertyDetailsViewModel
 
     public IReadOnlyList<Unit> Units => Property.Units.OrderBy(unit => unit.UnitNumber).ToList();
 }
+
+/// <summary>The paged list of units an applicant can apply for right now.</summary>
+public class AvailableUnitsBrowseViewModel
+{
+    public required IReadOnlyList<Unit> Units { get; init; }
+
+    public required int TotalCount { get; init; }
+
+    public required int Page { get; init; }
+
+    public required int PageSize { get; init; }
+
+    public required DateOnly AsOf { get; init; }
+
+    /// <summary>Only an applicant is offered the Apply button; a manager is here to look.</summary>
+    public required bool CanApply { get; init; }
+
+    public int PageCount => PageSize <= 0 ? 0 : (int)Math.Ceiling(TotalCount / (double)PageSize);
+
+    public bool HasPrevious => Page > 1;
+
+    public bool HasNext => Page < PageCount;
+}

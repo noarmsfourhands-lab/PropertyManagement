@@ -43,6 +43,7 @@ public interface IPropertyService
     Task<UnitPage> GetAvailableUnitsAsync(
         DateOnly asOf,
         int take,
+        int skip = 0,
         CancellationToken cancellationToken = default);
 
     Task<DomainResult> SavePropertyAsync(PropertyInput input, CancellationToken cancellationToken = default);
@@ -108,9 +109,11 @@ public class PropertyService(PropertyManagementDbContext db) : IPropertyService
     public async Task<UnitPage> GetAvailableUnitsAsync(
         DateOnly asOf,
         int take,
+        int skip = 0,
         CancellationToken cancellationToken = default)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(take);
+        ArgumentOutOfRangeException.ThrowIfNegative(skip);
 
         var available = db.Units
             .AsNoTracking()
@@ -123,6 +126,7 @@ public class PropertyService(PropertyManagementDbContext db) : IPropertyService
             .Include(unit => unit.UnitType)
             .OrderBy(unit => unit.Property.Name)
             .ThenBy(unit => unit.UnitNumber)
+            .Skip(skip)
             .Take(take)
             .ToListAsync(cancellationToken);
 

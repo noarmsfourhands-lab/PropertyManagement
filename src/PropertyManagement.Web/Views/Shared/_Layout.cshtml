@@ -23,6 +23,12 @@
                                 <a class="nav-link" asp-controller="RentalApplications" asp-action="Index">Applications</a>
                             </li>
                         }
+                        @if (User.Identity?.IsAuthenticated == true)
+                        {
+                            <li class="nav-item">
+                                <a class="nav-link" asp-controller="Units" asp-action="Browse">Available units</a>
+                            </li>
+                        }
                         @if (User.IsInRole(UserRole.PropertyManager))
                         {
                             <li class="nav-item">

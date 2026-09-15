@@ -194,11 +194,18 @@ public class RentalApplicationsController(
 
         if (saved.Failed)
         {
+            // A rule rejected the save, so what is on screen is no longer the useful thing to
+            // show. This matters most for a stale save: the page comes back with what is actually
+            // stored, and with a token matching it, rather than the user's copy and a fresh token
+            // that would let a second Continue overwrite the other person's work after all.
+            var reloaded = await LoadAsync(model.ApplicationId, cancellationToken) ?? context;
+
+            // Model state still holds the posted values, and the tag helpers prefer those over
+            // the model, so it is cleared before the message is put back.
+            ModelState.Clear();
             AddError(null, saved.Error!);
 
-            // Reload so the page shows what is actually stored alongside the rejection.
-            var reloaded = await LoadAsync(model.ApplicationId, cancellationToken) ?? context;
-            return View(nameof(Edit), Rehydrate(model, reloaded));
+            return View(nameof(Edit), BuildModel(reloaded, model.CurrentSection));
         }
 
         var next = ApplicationWizard.Next(model.CurrentSection) ?? ApplicationSection.Summary;
@@ -224,10 +231,12 @@ public class RentalApplicationsController(
 
         if (result.Failed)
         {
+            var reloaded = await LoadAsync(model.ApplicationId, cancellationToken) ?? context;
+
+            ModelState.Clear();
             AddError(null, result.Error!);
 
-            var reloaded = await LoadAsync(model.ApplicationId, cancellationToken) ?? context;
-            return View(nameof(Edit), Rehydrate(model, reloaded));
+            return View(nameof(Edit), BuildModel(reloaded, ApplicationSection.Summary));
         }
 
         TempData["StatusMessage"] = "Your application has been submitted.";
@@ -273,8 +282,11 @@ public class RentalApplicationsController(
             return ModalValidationFailed("_ConfirmWithdraw", context.Application);
         }
 
-        // No region named, so the page reloads: withdrawing changes the whole screen.
-        return ModalSucceeded(Url.Action(nameof(Edit), new { id })!, target: null, "Application withdrawn.");
+        // No region named, so the page reloads: withdrawing changes the whole screen. The message
+        // goes in TempData because a reload discards anything announced in the browser.
+        TempData["StatusMessage"] = "Application withdrawn.";
+
+        return ModalSucceeded(Url.Action(nameof(Edit), new { id })!, target: null);
     }
 
     // ---------------------------------------------------------------- Residence modal

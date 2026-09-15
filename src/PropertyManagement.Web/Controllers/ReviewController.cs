@@ -76,10 +76,12 @@ public class ReviewController(
         }
 
         // The decision changes the whole screen, so the page reloads rather than a single region.
+        // A reload discards anything announced in the browser, so the message goes in TempData.
+        TempData["StatusMessage"] = $"Review recorded: {model.Outcome}.";
+
         return ModalSucceeded(
             Url.Action("Edit", "RentalApplications", new { id = model.ApplicationId })!,
-            target: null,
-            $"Review completed: {model.Outcome}.");
+            target: null);
     }
 
     /// <summary>Takes a submitted application out of the queue before reviewing it.</summary>
