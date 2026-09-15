@@ -1,0 +1,29 @@
+@model PropertyManagement.Web.ViewModels.Applications.RemoveApplicantViewModel
+
+<form asp-controller="Applicants" asp-action="Remove" method="post"
+      data-modal-form
+      data-refresh-target="#applicant-list"
+      data-refresh-url="@Url.Action("ListPartial", "Applicants", new { id = Model.ApplicationId })">
+    @Html.AntiForgeryToken()
+    <input type="hidden" asp-for="ApplicationId" />
+    <input type="hidden" asp-for="UserId" />
+    <input type="hidden" asp-for="Name" />
+
+    <div class="modal-header">
+        <h5 class="modal-title">Remove applicant</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+    </div>
+
+    <div class="modal-body">
+        <div asp-validation-summary="ModelOnly" class="text-danger small mb-3"></div>
+        <p class="mb-0">
+            Remove <strong>@Model.Name</strong> from this application? They will no longer be able
+            to view or edit it.
+        </p>
+    </div>
+
+    <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="submit" class="btn btn-danger">Remove</button>
+    </div>
+</form>

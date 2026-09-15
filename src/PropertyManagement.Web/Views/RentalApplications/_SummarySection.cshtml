@@ -6,6 +6,32 @@
 *@
 <h2 class="h5 mb-3">Summary</h2>
 
+@if (Model.CanEdit && Model.Problems.Count > 0)
+{
+    @*
+        Everything still standing between this application and being submitted, grouped by the
+        section it belongs to, with a link straight to that section.
+    *@
+    <div class="alert alert-warning">
+        <p class="fw-semibold mb-2">Still to fix before you can submit</p>
+
+        @foreach (var group in Model.ProblemsBySection)
+        {
+            <p class="mb-1 mt-2">
+                <a asp-action="Edit" asp-route-id="@Model.ApplicationId" asp-route-section="@group.Key">
+                    @PropertyManagement.Web.ViewModels.Applications.SectionValidation.SectionLabel(group.Key)
+                </a>
+            </p>
+            <ul class="mb-0 small">
+            @foreach (var problem in group)
+            {
+                <li>@problem.Message</li>
+            }
+            </ul>
+        }
+    </div>
+}
+
 <div class="mb-4">
     <partial name="_ApplicantInformationSection" model="Model" />
 </div>

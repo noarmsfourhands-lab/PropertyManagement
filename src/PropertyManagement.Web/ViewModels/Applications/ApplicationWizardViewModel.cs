@@ -9,9 +9,20 @@ namespace PropertyManagement.Web.ViewModels.Applications;
 /// <summary>Which button on the single form was pressed.</summary>
 public enum WizardCommand
 {
+    /// <summary>Validate the current section, save it only if valid, and move on.</summary>
     Continue = 0,
+
+    /// <summary>Go back a section without saving or validating.</summary>
     Back = 1,
-    Submit = 2
+
+    /// <summary>Submit, from the Summary, once nothing is blocking it.</summary>
+    Submit = 2,
+
+    /// <summary>
+    /// Save the current section as it stands, even while it is still wrong, and stay on it. The
+    /// errors are shown, and submission remains blocked until they are dealt with.
+    /// </summary>
+    SaveDraft = 3
 }
 
 /// <summary>
@@ -160,7 +171,13 @@ public class ApplicationWizardViewModel
     /// <summary>Null when Submit may be offered; otherwise why it may not.</summary>
     public string? SubmitBlockedReason { get; private set; }
 
-    public bool CanSubmit => SubmitBlockedReason is null;
+    /// <summary>
+    /// Everything still wrong with the stored application, whichever section it is in. Populated
+    /// on every render, because a draft save can leave a section saved but incomplete.
+    /// </summary>
+    public IReadOnlyList<SectionProblem> Problems { get; private set; } = [];
+
+    public bool CanSubmit => SubmitBlockedReason is null && Problems.Count == 0;
 
     public bool CanWithdraw { get; private set; }
 
@@ -176,6 +193,13 @@ public class ApplicationWizardViewModel
     public bool ShowBack => ApplicationWizard.Previous(CurrentSection) is not null;
 
     public bool ShowContinue => CanEdit && CurrentSection != ApplicationSection.Summary;
+
+    /// <summary>Draft saving is offered on the sections that hold data, never on the Summary.</summary>
+    public bool ShowSaveDraft => CanEdit && ApplicationWizard.IsDataSection(CurrentSection);
+
+    /// <summary>The blocking problems grouped under the section they belong to.</summary>
+    public IEnumerable<IGrouping<ApplicationSection, SectionProblem>> ProblemsBySection =>
+        Problems.GroupBy(problem => problem.Section).OrderBy(group => group.Key);
 
     /// <summary>
     /// Whether the section partials render as inputs or as text. The Summary is a read-only view
@@ -240,6 +264,10 @@ public class ApplicationWizardViewModel
 
         var submit = ApplicationWorkflow.CanSubmit(application, isApplicantOn);
         SubmitBlockedReason = submit.Succeeded ? null : submit.Error;
+
+        // Evaluated against what is stored, not against what was posted, so the Summary reports
+        // the application as it actually stands.
+        Problems = SectionValidation.ProblemsWith(application);
 
         CanWithdraw = ApplicationWorkflow.CanWithdraw(application, isApplicantOn).Succeeded;
 

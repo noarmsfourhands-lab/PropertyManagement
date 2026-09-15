@@ -158,6 +158,7 @@ public class RentalApplicationsController(
         return command switch
         {
             WizardCommand.Continue => await ContinueAsync(model, context, cancellationToken),
+            WizardCommand.SaveDraft => await SaveDraftAsync(model, context, cancellationToken),
             WizardCommand.Submit => await SubmitAsync(model, context, cancellationToken),
             _ => BadRequest()
         };
@@ -186,6 +187,7 @@ public class RentalApplicationsController(
                 model.ApplicationId,
                 model.ResidenceHistoryVersion,
                 context.UserId,
+                requireComplete: true,
                 cancellationToken),
 
             // The Summary holds nothing to save; Continue is not offered there.
@@ -212,6 +214,69 @@ public class RentalApplicationsController(
         return RedirectToAction(nameof(Edit), new { id = model.ApplicationId, section = next });
     }
 
+    /// <summary>
+    /// Saves the section exactly as it stands, even while it is still wrong, and stays on it with
+    /// the errors shown. What the applicant typed is kept, because the point of the action is to
+    /// put work down and come back to it.
+    /// </summary>
+    private async Task<IActionResult> SaveDraftAsync(
+        ApplicationWizardViewModel model,
+        ApplicationContext context,
+        CancellationToken cancellationToken)
+    {
+        var saved = model.CurrentSection switch
+        {
+            ApplicationSection.ApplicantInformation => await applications.SaveApplicantInformationAsync(
+                model.ApplicantInformation.ToInput(model.ApplicationId, model.ApplicantInformationVersion),
+                context.UserId,
+                cancellationToken),
+
+            ApplicationSection.ResidenceHistory => await applications.SaveResidenceHistoryAsync(
+                model.ApplicationId,
+                model.ResidenceHistoryVersion,
+                context.UserId,
+                requireComplete: false,
+                cancellationToken),
+
+            _ => Domain.Common.DomainResult.Success()
+        };
+
+        var reloaded = await LoadAsync(model.ApplicationId, cancellationToken) ?? context;
+
+        if (saved.Failed)
+        {
+            ModelState.Clear();
+            AddError(null, saved.Error!);
+            return View(nameof(Edit), BuildModel(reloaded, model.CurrentSection));
+        }
+
+        // Only the current section's rules are reported, so the reader is not told about a section
+        // they are not looking at. The Summary is where the whole list belongs.
+        ValidateOnlyCurrentSection(model.CurrentSection);
+        ReportProblems(reloaded, model.CurrentSection);
+
+        TempData["StatusMessage"] = ModelState.IsValid
+            ? "Saved."
+            : "Saved. There is still something to fix before you can submit.";
+
+        return View(nameof(Edit), Rehydrate(model, reloaded));
+    }
+
+    /// <summary>
+    /// Copies a section's outstanding problems onto model state, each against the field it belongs
+    /// to, so they render exactly as a failed post would render them.
+    /// </summary>
+    private void ReportProblems(ApplicationContext context, ApplicationSection? only = null)
+    {
+        var problems = SectionValidation.ProblemsWith(context.Application)
+            .Where(problem => only is null || problem.Section == only);
+
+        foreach (var problem in problems)
+        {
+            ModelState.AddModelError(problem.ModelStateKey, problem.Message);
+        }
+    }
+
     private async Task<IActionResult> SubmitAsync(
         ApplicationWizardViewModel model,
         ApplicationContext context,
@@ -221,6 +286,21 @@ public class RentalApplicationsController(
         if (model.CurrentSection != ApplicationSection.Summary)
         {
             return BadRequest();
+        }
+
+        // A draft save can leave a section stored but incomplete, so submission is refused here
+        // rather than only being hidden in the page. This is the server-side half of the rule.
+        var outstanding = SectionValidation.ProblemsWith(context.Application);
+
+        if (outstanding.Count > 0)
+        {
+            var reloaded = await LoadAsync(model.ApplicationId, cancellationToken) ?? context;
+
+            ModelState.Clear();
+            AddError(null, "This application still has errors and cannot be submitted.");
+            ReportProblems(reloaded);
+
+            return View(nameof(Edit), BuildModel(reloaded, ApplicationSection.Summary));
         }
 
         var result = await applications.SubmitAsync(

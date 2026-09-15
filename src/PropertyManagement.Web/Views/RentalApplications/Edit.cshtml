@@ -60,13 +60,25 @@
         </div>
 
         <div class="card-footer bg-white d-flex justify-content-between align-items-center">
-            <div>
+            <div class="d-flex gap-2">
                 @if (Model.ShowBack)
                 {
                     @* Back posts too, but the action returns without saving or validating. *@
                     <button type="submit" name="command" value="@WizardCommand.Back" class="btn btn-outline-secondary"
                             formnovalidate>
                         Back
+                    </button>
+                }
+
+                @if (Model.ShowSaveDraft)
+                {
+                    @*
+                        formnovalidate on purpose: the whole point is to save work that is not
+                        finished. The server records it and reports what is still wrong.
+                    *@
+                    <button type="submit" name="command" value="@WizardCommand.SaveDraft"
+                            class="btn btn-outline-primary" formnovalidate>
+                        Save for later
                     </button>
                 }
             </div>
@@ -129,7 +141,18 @@
     }
 </div>
 
-@* A view component: it queries its own data and decides for itself that applicants see nothing. *@
+@*
+    Three view components, each querying its own data and each deciding for itself who may see it,
+    rather than relying on this page to remember to guard them.
+*@
+<div class="mt-4">
+    @await Component.InvokeAsync("ApplicationApplicants", new { applicationId = Model.ApplicationId })
+</div>
+
+<div class="mt-4">
+    @await Component.InvokeAsync("ApplicationNotes", new { applicationId = Model.ApplicationId })
+</div>
+
 <div class="mt-4">
     @await Component.InvokeAsync("ApplicationHistory", new { applicationId = Model.ApplicationId })
 </div>

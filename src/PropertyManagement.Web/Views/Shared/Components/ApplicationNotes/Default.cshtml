@@ -1,0 +1,21 @@
+@model PropertyManagement.Web.ViewModels.Applications.NoteListViewModel
+@*
+    Only ever rendered for a property manager: the component returns nothing at all otherwise,
+    so an applicant does not even learn that notes exist.
+*@
+<div class="card shadow-sm">
+    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+        <span class="fw-semibold">
+            Internal notes
+            <span class="badge text-bg-secondary ms-1">Property managers only</span>
+        </span>
+        <button type="button" class="btn btn-sm btn-primary"
+                data-modal-url="@Url.Action("Form", "Notes", new { id = 0, applicationId = Model.ApplicationId })">
+            Add note
+        </button>
+    </div>
+
+    <div id="note-list">
+        <partial name="_NoteList" model="Model" />
+    </div>
+</div>

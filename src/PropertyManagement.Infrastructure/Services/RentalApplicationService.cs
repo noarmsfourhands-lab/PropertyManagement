@@ -101,6 +101,7 @@ public interface IRentalApplicationService
         int applicationId,
         Guid version,
         string userId,
+        bool requireComplete = true,
         CancellationToken cancellationToken = default);
 
     Task<DomainResult> SaveResidenceAsync(
@@ -266,12 +267,19 @@ public class RentalApplicationService(PropertyManagementDbContext db, TimeProvid
 
     /// <summary>
     /// Marks the residence history section saved. The residences themselves are written by the
-    /// modal; this records that the applicant has been through the section and it was complete.
+    /// modal; this records that the applicant has been through the section.
     /// </summary>
+    /// <param name="requireComplete">
+    /// True when moving on, which needs the section to be complete. False for a deliberate draft
+    /// save, which records progress on a section the applicant has not finished. Submission is
+    /// blocked either way while anything is still wrong; this only decides whether the save itself
+    /// is refused.
+    /// </param>
     public async Task<DomainResult> SaveResidenceHistoryAsync(
         int applicationId,
         Guid version,
         string userId,
+        bool requireComplete = true,
         CancellationToken cancellationToken = default)
     {
         var application = await db.RentalApplications
@@ -291,11 +299,14 @@ public class RentalApplicationService(PropertyManagementDbContext db, TimeProvid
             return permitted;
         }
 
-        var complete = ResidenceRules.ValidateHistory([.. application.Residences]);
-
-        if (complete.Failed)
+        if (requireComplete)
         {
-            return complete;
+            var complete = ResidenceRules.ValidateHistory([.. application.Residences]);
+
+            if (complete.Failed)
+            {
+                return complete;
+            }
         }
 
         application.ResidenceHistorySavedAtUtc = timeProvider.GetUtcNow().UtcDateTime;

@@ -1,0 +1,23 @@
+@model PropertyManagement.Domain.Entities.PropertyManagerNote
+
+<form asp-controller="Notes" asp-action="Delete" asp-route-id="@Model.Id" method="post"
+      data-modal-form
+      data-refresh-target="#note-list"
+      data-refresh-url="@Url.Action("ListPartial", "Notes", new { id = Model.RentalApplicationId })">
+    @Html.AntiForgeryToken()
+
+    <div class="modal-header">
+        <h5 class="modal-title">Remove note</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+    </div>
+
+    <div class="modal-body">
+        <div asp-validation-summary="ModelOnly" class="text-danger small mb-3"></div>
+        <p class="mb-0">Remove this note? It cannot be recovered.</p>
+    </div>
+
+    <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="submit" class="btn btn-danger">Remove</button>
+    </div>
+</form>

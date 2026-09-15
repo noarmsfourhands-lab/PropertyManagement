@@ -104,9 +104,13 @@ modal body. A **view component** has work of its own to do.
 - `AvailableUnitsViewComponent` resolves today's date, asks the database which units are free, and
   decides how many to show. It can be dropped onto any page without that page's controller knowing
   anything about units.
-- `ApplicationHistoryViewComponent` runs its own query and makes its own access decision: an
-  applicant gets nothing at all, not an empty panel. Putting the role check inside the component
-  means it cannot be added to a page that forgets to guard it.
+- `ApplicationHistoryViewComponent` and `ApplicationNotesViewComponent` each run their own query
+  and make their own access decision: an applicant gets nothing at all, not an empty panel. Putting
+  the check inside the component means it cannot be added to a page that forgets to guard it.
+- `ApplicationApplicantsViewComponent` decides three ways rather than two, offering the controls
+  only to an applicant on an application that can still be edited.
+- `DataGridViewComponent` is the reusable one: it is handed columns and an endpoint and knows
+  nothing about what it is listing.
 
 ## Model decisions
 
@@ -193,12 +197,76 @@ Two suites, because they answer different questions.
 | Suite | What it proves | Count |
 | --- | --- | --- |
 | `PropertyManagement.Domain.Tests` | The business rules are right, as plain function calls | 114 |
-| `PropertyManagement.Infrastructure.Tests` | The model, queries and services work against a real relational database | 39 |
+| `PropertyManagement.Infrastructure.Tests` | The model, queries and services work against a real relational database | 77 |
+| `PropertyManagement.Web.Tests` | Section validation and what the wizard offers | 15 |
 
 The integration suite runs on SQLite held in memory, which enforces keys, unique indexes and
 optimistic concurrency the way a server does while needing nothing installed. It is what proves the
 schema builds, the queries translate, the concurrency tokens behave as configured, and the seeder is
-idempotent. The application itself runs on SQL Server, as required.
+idempotent. The application itself runs on SQL Server, as required, and the first run there was
+checked by hand: the database was created, the migration applied, and a second start applied no
+migration and created nothing.
+
+## The grid and its endpoint
+
+Bonus one asks for the list to be extracted into a reusable grid component driven by a documented
+JSON endpoint. `DataGridViewComponent` is that component, and it is reusable because it is
+ignorant: a column names a property on the returned row, and anything needing a decision, such as a
+status label or the colour of its badge, is decided by the endpoint and arrives as a field. Nothing
+in `data-grid.js` mentions applications, and every value is written with `textContent`, so a field
+from the endpoint is never treated as markup.
+
+Sorting goes through an enum rather than a column name taken from the request. A request cannot
+therefore order by a column that was never meant to be exposed, and there is no path from the query
+string into the shape of the SQL. Ordering, filtering, counting and paging all happen in the
+database, with a tiebreak on the id so a row cannot drift between pages when the sort key ties.
+
+The endpoint is documented at `/openapi/v1.json`, taking its descriptions from XML comments on the
+action. A signed-out request to anything under `/api` is answered with 401 rather than a redirect
+to the sign-in page, because handing a caller expecting JSON a page of HTML and a success status is
+worse than telling it plainly.
+
+## Saving work that is not finished
+
+Bonus four asks that a section can be saved while it is still wrong. That sits awkwardly beside
+requirement 4b.i, which says Continue persists a section *only* when it is valid. Rather than
+choose between them, Continue keeps the behaviour the requirement describes and draft saving is a
+second, separate action:
+
+| Button | Saves | Validates | Moves |
+| --- | --- | --- | --- |
+| Continue | only when valid | yes | to the next section |
+| Save for later | always | reports, does not block | stays put |
+| Back | never | no | to the previous section |
+
+Both requirements are then met literally, and the two behaviours are told apart by which button was
+pressed, which is the mechanism the page already uses.
+
+The rules themselves are defined once. `SectionValidation` evaluates the section view model's own
+data annotations with `Validator`, so the attributes that model binding uses when a section is on
+screen are the same ones that answer the Summary's question about a section the reader cannot
+currently see. Each problem carries the member name it came from, which is turned back into the
+model-state key the input is bound to, so a message raised from the Summary lands on the same field
+it would have landed on had the section been posted.
+
+Submission is refused in the service and not merely hidden in the page, because a draft save can
+leave a section stored but incomplete.
+
+## Notes and shared applications
+
+**Manager-only notes are guarded three times.** The controller sits behind the property manager
+policy; the view component makes its own role check and returns nothing at all rather than an empty
+panel, so an applicant does not even learn that notes exist; and no applicant-facing view model or
+endpoint projects the type. A note therefore cannot leak because someone forgot a guard on a new
+page.
+
+**A second applicant needs no new permission code.** Ownership was a set from the first commit, so
+every check already asks whether the user is among the applicants rather than whether they are the
+applicant. Adding someone to that set is the whole of granting them access, and a test asserts that
+the person added can then save a section. Adding is by email and refuses a property manager with
+the same message as an unknown address, so it cannot be used to discover which addresses have
+accounts. The applicant who started an application cannot be removed, because withdrawing is the
+action for giving the whole thing up.
 
 ## Requirements coverage
 
@@ -231,10 +299,12 @@ idempotent. The application itself runs on SQL Server, as required.
 
 ### Bonus items
 
-| Bonus | State |
+All five are implemented.
+
+| Bonus | Where |
 | --- | --- |
-| 1. Paging and sorting in the database | Paging done; the reusable grid over a documented JSON endpoint is not built |
-| 2. Review queue with claim and release | Done |
-| 3. Manager-only notes | Modelled, no UI |
-| 4. Save a section that fails validation | Not done; Continue saves only a valid section, as the main requirement asks |
-| 5. Multiple applicants, stale saves rejected | Ownership is a set, and the stale-save rejection works and is tested; there is no UI for inviting a second applicant |
+| 1. Paging and sorting in the database, a reusable grid over a documented JSON endpoint | `DataGridViewComponent`, `ApplicationsApiController`, `/openapi/v1.json` |
+| 2. Review queue with claim and release | `ReviewService.ClaimAsync` and `ReleaseAsync` |
+| 3. Manager-only notes | `NoteService`, `ApplicationNotesViewComponent` |
+| 4. Save a section that fails validation, Summary lists what blocks submission | `WizardCommand.SaveDraft`, `SectionValidation` |
+| 5. More than one applicant, stale saves rejected | `ApplicationApplicantService`, per-section concurrency tokens |

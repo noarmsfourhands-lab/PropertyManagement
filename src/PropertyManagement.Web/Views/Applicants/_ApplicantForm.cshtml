@@ -1,0 +1,33 @@
+@model PropertyManagement.Web.ViewModels.Applications.AddApplicantViewModel
+
+<form asp-controller="Applicants" asp-action="Add" method="post"
+      data-modal-form
+      data-refresh-target="#applicant-list"
+      data-refresh-url="@Url.Action("ListPartial", "Applicants", new { id = Model.ApplicationId })">
+    @Html.AntiForgeryToken()
+    <input type="hidden" asp-for="ApplicationId" />
+
+    <div class="modal-header">
+        <h5 class="modal-title">Add applicant</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+    </div>
+
+    <div class="modal-body">
+        <div asp-validation-summary="ModelOnly" class="text-danger small mb-3"></div>
+
+        <div class="mb-0">
+            <label asp-for="Email" class="form-label"></label>
+            <input asp-for="Email" class="form-control" autocomplete="off" />
+            <div class="form-text">
+                They need an applicant account already. Once added they can view and edit this
+                application exactly as you can.
+            </div>
+            <span asp-validation-for="Email" class="text-danger small"></span>
+        </div>
+    </div>
+
+    <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="submit" class="btn btn-primary">Add</button>
+    </div>
+</form>

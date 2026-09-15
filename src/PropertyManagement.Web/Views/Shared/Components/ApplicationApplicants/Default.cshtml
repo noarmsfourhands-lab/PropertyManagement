@@ -1,0 +1,25 @@
+@model PropertyManagement.Web.ViewModels.Applications.ApplicantListViewModel
+
+<div class="card shadow-sm">
+    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+        <span class="fw-semibold">
+            Applicants
+            @if (Model.IsShared)
+            {
+                <span class="badge text-bg-info ms-1">Shared</span>
+            }
+        </span>
+
+        @if (Model.CanManage)
+        {
+            <button type="button" class="btn btn-sm btn-outline-primary"
+                    data-modal-url="@Url.Action("Form", "Applicants", new { id = Model.ApplicationId })">
+                Add applicant
+            </button>
+        }
+    </div>
+
+    <div id="applicant-list">
+        <partial name="_ApplicantList" model="Model" />
+    </div>
+</div>

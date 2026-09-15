@@ -100,12 +100,13 @@ set `Seeding:Enabled` to `false` to apply migrations without writing demo data.
 dotnet test
 ```
 
-153 tests across two suites, neither of which needs SQL Server:
+206 tests across three suites, none of which needs SQL Server:
 
 | Suite | What it covers |
 | --- | --- |
 | `PropertyManagement.Domain.Tests` | The business rules, as plain function calls over domain objects |
 | `PropertyManagement.Infrastructure.Tests` | The model, the queries and the services, against SQLite held in memory |
+| `PropertyManagement.Web.Tests` | Section validation, and what the application page offers |
 
 The second suite is what proves the schema actually builds, the queries translate, the per-section
 concurrency tokens behave as configured, and the seeder is safe to run twice. SQLite is used there
@@ -121,6 +122,7 @@ itself runs on SQL Server.
 | `src/PropertyManagement.Web` | Controllers, view models, Razor views, partial views, view components. |
 | `tests/PropertyManagement.Domain.Tests` | Unit tests for the business rules. |
 | `tests/PropertyManagement.Infrastructure.Tests` | Model, query, service and seeding tests against a real database. |
+| `tests/PropertyManagement.Web.Tests` | Validation and presentation-decision tests. |
 
 The dependency arrows all point inward: the web project depends on infrastructure and domain,
 infrastructure depends on domain, and the domain depends on nothing. That is what lets the rules be

@@ -1,0 +1,43 @@
+@model PropertyManagement.Web.ViewModels.Applications.ApplicantListViewModel
+@*
+    In Shared because both the applicants view component, hosted on the application page, and the
+    applicants controller render it.
+*@
+<ul class="list-group list-group-flush">
+@foreach (var applicant in Model.Applicants)
+{
+    <li class="list-group-item d-flex justify-content-between align-items-center">
+        <div>
+            <span class="fw-semibold">@applicant.Name</span>
+            @if (applicant.IsPrimary)
+            {
+                <span class="badge text-bg-secondary ms-1">Started this application</span>
+            }
+            @if (applicant.UserId == Model.CurrentUserId)
+            {
+                <span class="badge text-bg-light border ms-1">You</span>
+            }
+            <div class="small text-muted">@applicant.Email</div>
+        </div>
+
+        @if (Model.CanManage && !applicant.IsPrimary)
+        {
+            <button type="button" class="btn btn-sm btn-outline-danger"
+                    data-modal-url="@Url.Action("ConfirmRemove", "Applicants", new { id = Model.ApplicationId, userId = applicant.UserId })">
+                Remove
+            </button>
+        }
+    </li>
+}
+</ul>
+
+@if (Model.CanManage)
+{
+    <div class="card-body border-top py-2">
+        <p class="text-muted small mb-0">
+            Anyone added here can view and edit this application. If two of you edit different
+            sections at once both saves are kept; if you both edit the same section, the second
+            save is refused and asks you to reload rather than overwriting the first.
+        </p>
+    </div>
+}

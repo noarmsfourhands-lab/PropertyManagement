@@ -55,6 +55,8 @@ public static class DependencyInjection
         services.AddScoped<IPropertyService, PropertyService>();
         services.AddScoped<IRentalApplicationService, RentalApplicationService>();
         services.AddScoped<IReviewService, ReviewService>();
+        services.AddScoped<INoteService, NoteService>();
+        services.AddScoped<IApplicationApplicantService, ApplicationApplicantService>();
 
         // Injected wherever the code needs "now", so tests can supply their own clock.
         services.TryAddSingleton(TimeProvider.System);

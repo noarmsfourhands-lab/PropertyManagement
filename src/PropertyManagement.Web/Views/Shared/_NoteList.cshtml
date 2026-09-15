@@ -1,0 +1,45 @@
+@model PropertyManagement.Web.ViewModels.Applications.NoteListViewModel
+@*
+    In Shared because two different places render it: the notes view component, which is hosted
+    on the application page, and the notes controller when a modal refreshes this region.
+*@
+
+@if (Model.IsEmpty)
+{
+    <div class="card-body text-center text-muted py-4">
+        <p class="mb-0">No notes on this application yet.</p>
+    </div>
+}
+else
+{
+    <ul class="list-group list-group-flush">
+    @foreach (var note in Model.Notes)
+    {
+        <li class="list-group-item">
+            <div class="d-flex justify-content-between align-items-start gap-3">
+                <div>
+                    @* Preserves the line breaks the author typed without treating the text as markup. *@
+                    <p class="mb-1" style="white-space: pre-wrap">@note.Body</p>
+                    <div class="small text-muted">
+                        @note.AuthorName &middot; @note.CreatedAtUtc.ToLocalTime().ToString("d MMM yyyy, HH:mm")
+                        @if (note.UpdatedAtUtc is not null)
+                        {
+                            <text>&middot; edited @note.UpdatedAtUtc.Value.ToLocalTime().ToString("d MMM yyyy, HH:mm")</text>
+                        }
+                    </div>
+                </div>
+                <div class="text-nowrap">
+                    <button type="button" class="btn btn-sm btn-outline-secondary"
+                            data-modal-url="@Url.Action("Form", "Notes", new { id = note.Id, applicationId = Model.ApplicationId })">
+                        Edit
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-danger"
+                            data-modal-url="@Url.Action("ConfirmDelete", "Notes", new { id = note.Id })">
+                        Remove
+                    </button>
+                </div>
+            </div>
+        </li>
+    }
+    </ul>
+}
