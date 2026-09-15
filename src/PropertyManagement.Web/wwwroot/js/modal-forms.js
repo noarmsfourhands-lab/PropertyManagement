@@ -99,6 +99,17 @@
         target.innerHTML = await response.text();
     }
 
+    /* A message rendered before the modal opened can be answered by what the modal just did,
+       so the page marks those elements and they are cleared once a save succeeds. */
+    function clearStaleMessages() {
+        document.querySelectorAll('[data-clear-on-success]').forEach(function (element) {
+            // Hidden as well as emptied: the validation summary is only rendered at all when it
+            // has something to say, so emptying it alone would leave a bare alert box behind.
+            element.innerHTML = '';
+            element.hidden = true;
+        });
+    }
+
     function announce(message) {
         if (!message) {
             return;
@@ -172,6 +183,7 @@
             var result = await response.json();
 
             modal.hide();
+            clearStaleMessages();
             await refreshRegion(
                 result.target || form.getAttribute('data-refresh-target'),
                 result.refreshUrl || form.getAttribute('data-refresh-url'));

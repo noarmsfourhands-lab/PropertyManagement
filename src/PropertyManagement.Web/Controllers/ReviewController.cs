@@ -39,13 +39,8 @@ public class ReviewController(
             return PartialView("_ReviewUnavailable", permitted.Error);
         }
 
-        var model = new ReviewFormViewModel
-        {
-            ApplicationId = application.Id,
-            PropertyName = application.Unit.Property?.Name ?? string.Empty,
-            UnitNumber = application.Unit.UnitNumber,
-            ApplicantName = application.ApplicantInformation.FullName
-        };
+        var model = new ReviewFormViewModel { ApplicationId = application.Id };
+        Describe(model, application);
 
         return PartialView(ReviewFormPartial, model);
     }
@@ -58,6 +53,7 @@ public class ReviewController(
 
         if (!ModelState.IsValid)
         {
+            await DescribeAsync(model, cancellationToken);
             return ModalValidationFailed(ReviewFormPartial, model);
         }
 
@@ -72,6 +68,7 @@ public class ReviewController(
                     : null,
                 result.Error);
 
+            await DescribeAsync(model, cancellationToken);
             return ModalValidationFailed(ReviewFormPartial, model);
         }
 
@@ -106,6 +103,27 @@ public class ReviewController(
         SetMessage(result, "Application released back to the queue.");
 
         return RedirectToAction("Edit", "RentalApplications", new { id });
+    }
+
+    /// <summary>
+    /// Fills in the line naming what is being reviewed. Those fields are shown, not edited, so a
+    /// post does not carry them and a re-render has to look them up again.
+    /// </summary>
+    private async Task DescribeAsync(ReviewFormViewModel model, CancellationToken cancellationToken)
+    {
+        var application = await applications.GetAsync(model.ApplicationId, cancellationToken);
+
+        if (application is not null)
+        {
+            Describe(model, application);
+        }
+    }
+
+    private static void Describe(ReviewFormViewModel model, Domain.Entities.RentalApplication application)
+    {
+        model.PropertyName = application.Unit.Property?.Name ?? string.Empty;
+        model.UnitNumber = application.Unit.UnitNumber;
+        model.ApplicantName = application.ApplicantInformation.FullName;
     }
 
     private void SetMessage(Domain.Common.DomainResult result, string success)

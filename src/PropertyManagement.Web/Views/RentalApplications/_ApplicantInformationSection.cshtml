@@ -86,12 +86,14 @@ else
             }
             else
             {
-                @info.AddressLine1
+                <div>@info.AddressLine1</div>
                 @if (!string.IsNullOrWhiteSpace(info.AddressLine2))
                 {
-                    <br />@info.AddressLine2
+                    <div>@info.AddressLine2</div>
                 }
-                <br />@info.City @info.State @info.PostalCode
+                @* One interpolated string: inside a code block Razor drops the whitespace
+                   between two adjacent expressions, which ran the city into the ZIP. *@
+                <div>@($"{info.City} {info.State} {info.PostalCode}")</div>
             }
         </dd>
     </dl>
