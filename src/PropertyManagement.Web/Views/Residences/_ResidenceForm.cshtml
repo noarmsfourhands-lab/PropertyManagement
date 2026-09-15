@@ -7,6 +7,7 @@
       data-refresh-url="@Url.Action("ListPartial", "Residences", new { id = Model.ApplicationId })">
     @Html.AntiForgeryToken()
     <input type="hidden" asp-for="Id" />
+    <input type="hidden" asp-for="Version" />
     <input type="hidden" asp-for="ApplicationId" id="modal-ApplicationId" />
 
     <div class="modal-header">

@@ -311,6 +311,12 @@ public class RentalApplicationService(PropertyManagementDbContext db, TimeProvid
                 return DomainResult.Failure("That residence no longer exists.");
             }
 
+            // The token the modal was opened with. EF puts it in the UPDATE's WHERE clause, so a
+            // save built on a copy somebody else has already changed matches no rows and is
+            // reported rather than overwriting their edit.
+            db.Entry(existing).Property(entity => entity.Version).OriginalValue = input.Version;
+            existing.Version = Guid.NewGuid();
+
             residence = existing;
         }
 
@@ -325,13 +331,11 @@ public class RentalApplicationService(PropertyManagementDbContext db, TimeProvid
         residence.MoveOutDate = input.MoveOutDate;
 
         // Deliberately does not touch ResidenceHistoryVersion. That token guards the section save,
-        // which writes a completion marker and nothing else; the rows are written here, one request
-        // at a time, each against current storage. Moving it from here would invalidate the token
-        // held by the page this modal was opened from, so the applicant's own next Continue would
-        // be refused as somebody else's edit. See the note on the entity.
-        await db.SaveChangesAsync(cancellationToken);
-
-        return DomainResult.Success();
+        // which writes a completion marker and nothing else. Moving it from here would invalidate
+        // the token held by the page this modal was opened from, so the applicant's own next
+        // Continue would be refused as somebody else's edit. The row carries its own token instead,
+        // which protects the row without touching the page. See the note on the entity.
+        return await SaveOrReportStaleAsync(cancellationToken);
     }
 
     public async Task<DomainResult> DeleteResidenceAsync(
@@ -501,8 +505,13 @@ public class RentalApplicationService(PropertyManagementDbContext db, TimeProvid
 
         var total = await query.CountAsync(cancellationToken);
 
-        var page = Math.Max(filter.Page, 1);
         var pageSize = Math.Clamp(filter.PageSize, 1, 100);
+
+        // Clamped at both ends. Flooring at one is not enough: (page - 1) * pageSize overflows for
+        // a large page number, wraps negative, and SQL Server refuses a negative OFFSET with a 500.
+        // The ceiling is the last page the filtered total can actually reach.
+        var lastPage = Math.Max(1, (int)Math.Ceiling(total / (double)pageSize));
+        var page = Math.Clamp(filter.Page, 1, lastPage);
 
         var rows = await OrderBy(query, filter.Sort, filter.Descending)
             // A stable tiebreak, so a row cannot drift between pages when the sort key ties.

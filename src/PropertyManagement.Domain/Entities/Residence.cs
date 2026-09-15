@@ -5,6 +5,17 @@ public class Residence
 {
     public int Id { get; set; }
 
+    /// <summary>
+    /// Concurrency token for this row.
+    ///
+    /// The section's token guards the section's own save and deliberately does not move when a row
+    /// changes, because the residence modal is opened from the page holding that token and moving
+    /// it would reject the applicant's own next Continue. That leaves one gap, which this closes:
+    /// two applicants editing the same residence at once. Without it the second save silently wrote
+    /// over the first, because each modal posts every field it was opened with.
+    /// </summary>
+    public Guid Version { get; set; } = Guid.NewGuid();
+
     public int RentalApplicationId { get; set; }
 
     public RentalApplication RentalApplication { get; set; } = null!;

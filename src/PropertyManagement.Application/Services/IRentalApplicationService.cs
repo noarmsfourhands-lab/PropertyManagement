@@ -23,6 +23,7 @@ public record ApplicantInformationInput(
 /// <summary>One residence, as posted from the modal. Id is zero when adding.</summary>
 public record ResidenceInput(
     int Id,
+    Guid Version,
     int ApplicationId,
     string AddressLine1,
     string? AddressLine2,

@@ -23,9 +23,14 @@ thereby be naming the project that knows the data is in a relational database, b
 replacing that implementation stops being a change of one line and becomes a change everywhere the
 type appears.
 
-The web project does still reference infrastructure, in exactly one file: `Program.cs`, which
-registers the implementations against the contracts. That is what a composition root is for, and it
-is the only place in the web project where the word "Infrastructure" appears.
+The web project does still reference infrastructure, and it is worth being exact about where. The
+composition root in `Program.cs` registers the implementations against the contracts, which is what
+a composition root is for. Two other files name it, both for ASP.NET Identity: the account
+controller, which needs `UserManager` and `SignInManager`, and the extension that reads the display
+name claim. Identity is infrastructure that the web layer has to touch to sign anybody in, so that
+is a deliberate exception rather than a leak. No controller, view model or view outside those three
+names it, which is the property that matters: nothing that renders or validates knows the data is
+in Entity Framework.
 
 ## Business rules live in one place
 
@@ -212,15 +217,22 @@ deciding it, leave them untouched, so those paths are last-write-wins. That is t
 each is already guarded by a status check that a second actor fails, but it is a narrower promise
 than "the row is protected", and worth saying so rather than implying otherwise.
 
-Residences are the case worth naming, because widening the promise there was tried and reverted.
+Residences needed both halves, and getting there took a wrong turn worth recording.
 Making a residence row move `ResidenceHistoryVersion` sounds like closing a gap: the rows are part
 of the section, so changing one should invalidate a save built before it. In practice the residence
 modal is opened from the page that holds that token, so an applicant adding a residence invalidated
 their own page, and the very next Continue came back as "someone else saved this section" with
 nobody else involved. It also protected nothing: the section save writes a completion marker, and
 the rows are written one request at a time, each against current storage, so no row can be lost to
-a stale page. The token covers the section's own save. `Adding_a_residence_does_not_block_the_next_section_save`
-walks the sequence a person actually performs and is there to stop this being re-introduced.
+a stale page. `Adding_a_residence_does_not_block_the_next_section_save` walks the sequence a person
+actually performs and is there to stop that being re-introduced.
+
+But reverting left a real gap, which the section token was the wrong tool for anyway: two applicants
+editing the *same* residence. Each modal posts every field it was opened with, so the second save
+wrote the first one's corrections back out with no warning. The row now carries its own token. That
+guards the row without touching the page the modal was opened from, which is exactly the combination
+the section token could not provide. Two tests pin both halves: the second editor is refused, and
+the page's own token is untouched so their next Continue still works.
 
 **A unit is referenced, not copied, so editing one is confirmed.** A rental application stores which
 unit it is for and nothing about that unit. Every screen showing an application reads the rent, type
@@ -374,8 +386,8 @@ Three suites, because they answer different questions.
 
 | Suite | What it proves | Count |
 | --- | --- | --- |
-| `PropertyManagement.Domain.Tests` | The business rules are right, as plain function calls | 123 |
-| `PropertyManagement.Infrastructure.Tests` | The model, queries and services work against a real relational database | 101 |
+| `PropertyManagement.Domain.Tests` | The business rules are right, as plain function calls | 129 |
+| `PropertyManagement.Infrastructure.Tests` | The model, queries and services work against a real relational database | 112 |
 | `PropertyManagement.Web.Tests` | Section validation, what the wizard offers, and what the pipeline returns | 45 |
 
 The integration suite runs on SQLite held in memory, which enforces keys, unique indexes and
@@ -482,7 +494,7 @@ action for giving the whole thing up.
 | Migrations applied and database created on start | `Program.cs` start-up scope | Done |
 | Idempotent seeding with Bogus, every status | `DatabaseSeeder` | Done |
 | ASP.NET Identity for users and roles | `DependencyInjection.AddInfrastructure` | Done |
-| Unit tests for business logic | 269 tests across three suites | Done |
+| Unit tests for business logic | 286 tests across three suites | Done |
 | Sign up, log in, log out with role choice | `AccountController` | Done |
 | Properties and units maintained through modals | `PropertiesController` | Done |
 | Partial views and view components | Section and modal partials; two view components | Done |

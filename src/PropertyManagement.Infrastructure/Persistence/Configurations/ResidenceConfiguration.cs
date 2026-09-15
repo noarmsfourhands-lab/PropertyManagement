@@ -13,6 +13,10 @@ public class ResidenceConfiguration : IEntityTypeConfiguration<Residence>
 
         builder.HasKey(residence => residence.Id);
 
+        // Guards this row against a concurrent edit of the same row. See the note on the entity for
+        // why the section's token cannot do this job.
+        builder.Property(residence => residence.Version).IsConcurrencyToken().IsRequired();
+
         builder.Property(residence => residence.AddressLine1).IsRequired().HasMaxLength(200);
         builder.Property(residence => residence.AddressLine2).HasMaxLength(200);
         builder.Property(residence => residence.City).IsRequired().HasMaxLength(100);

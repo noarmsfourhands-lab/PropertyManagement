@@ -14,9 +14,18 @@ public static class LeaseTerm
 
     /// <summary>
     /// Inclusive last day of a twelve-month term. A lease starting 2026-01-01 ends 2026-12-31.
+    ///
+    /// The subtraction is skipped when the anniversary had to be clamped, which for a twelve-month
+    /// term happens only from 29 February. AddMonths lands 2028-02-29 on 2029-02-28 because there
+    /// is no 29th to land on, and taking a further day off would shorten the term twice: the lease
+    /// would end 2029-02-27 and the unit would read as available a day before its lease ran out.
     /// </summary>
-    public static DateOnly EndDateFor(DateOnly startDate) =>
-        startDate.AddMonths(Months).AddDays(-1);
+    public static DateOnly EndDateFor(DateOnly startDate)
+    {
+        var anniversary = startDate.AddMonths(Months);
+
+        return anniversary.Day == startDate.Day ? anniversary.AddDays(-1) : anniversary;
+    }
 
     /// <summary>Builds the lease that approval issues for a unit.</summary>
     public static Lease Issue(Unit unit, RentalApplication application, DateOnly startDate) =>

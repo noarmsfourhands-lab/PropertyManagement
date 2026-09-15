@@ -240,7 +240,7 @@ public class RentalApplicationServiceTests : IDisposable
 
         var result = await ServiceOver(db).SaveResidenceAsync(
             new ResidenceInput(
-                0, application.Id, "3 Maple Way", null, "Eugene", "OR", "97401",
+                0, Guid.NewGuid(), application.Id, "3 Maple Way", null, "Eugene", "OR", "97401",
                 "Jo Marsh", "555-0122",
                 new DateOnly(2024, 6, 1),
                 new DateOnly(2024, 1, 1)),
@@ -337,6 +337,69 @@ public class RentalApplicationServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task Two_applicants_editing_the_same_residence_do_not_overwrite_each_other()
+    {
+        await using var db = _database.CreateContext();
+        var property = await TestData.AddPropertyWithUnitsAsync(db);
+        var application = await TestData.AddCompleteDraftAsync(db, property.Units.First().Id);
+        var residence = application.Residences.First();
+
+        // Both applicants opened the modal on the same row, so both hold the same token.
+        var tokenBothOpenedWith = residence.Version;
+        var service = ServiceOver(db);
+
+        ResidenceInput Edit(string landlord) => new(
+            residence.Id, tokenBothOpenedWith, application.Id,
+            residence.AddressLine1, null, residence.City, residence.State, residence.PostalCode,
+            landlord, residence.LandlordPhone, residence.MoveInDate, residence.MoveOutDate);
+
+        var first = await service.SaveResidenceAsync(Edit("Corrected Landlord"), TestData.Applicant, TestData.Today);
+
+        Assert.True(first.Succeeded, first.Error);
+
+        // The second applicant still holds the token from before the first save. Without a token on
+        // the row this went through and quietly replaced the first applicant's correction, because
+        // the modal posts every field it was opened with.
+        var second = await service.SaveResidenceAsync(Edit("Stale Landlord"), TestData.Applicant, TestData.Today);
+
+        Assert.True(second.Failed);
+        Assert.Contains("reload", second.Error!, StringComparison.OrdinalIgnoreCase);
+
+        await using var check = _database.CreateContext();
+        var stored = await check.Residences.FirstAsync(entity => entity.Id == residence.Id);
+
+        Assert.Equal("Corrected Landlord", stored.LandlordName);
+    }
+
+    [Fact]
+    public async Task Editing_a_residence_still_leaves_the_pages_own_token_alone()
+    {
+        await using var db = _database.CreateContext();
+        var property = await TestData.AddPropertyWithUnitsAsync(db);
+        var application = await TestData.AddCompleteDraftAsync(db, property.Units.First().Id);
+        var residence = application.Residences.First();
+        var sectionToken = application.ResidenceHistoryVersion;
+
+        var saved = await ServiceOver(db).SaveResidenceAsync(
+            new ResidenceInput(
+                residence.Id, residence.Version, application.Id,
+                "5 Changed Street", null, residence.City, residence.State, residence.PostalCode,
+                residence.LandlordName, residence.LandlordPhone, residence.MoveInDate, residence.MoveOutDate),
+            TestData.Applicant,
+            TestData.Today);
+
+        Assert.True(saved.Succeeded, saved.Error);
+
+        await using var check = _database.CreateContext();
+        var stored = await check.RentalApplications.FirstAsync(entity => entity.Id == application.Id);
+
+        // The row is guarded and the page is not invalidated. That combination is the whole point:
+        // guarding the row through the section's token instead made the applicant's own next
+        // Continue fail as somebody else's edit.
+        Assert.Equal(sectionToken, stored.ResidenceHistoryVersion);
+    }
+
+    [Fact]
     public async Task Adding_a_residence_leaves_the_sections_token_alone()
     {
         await using var db = _database.CreateContext();
@@ -346,7 +409,7 @@ public class RentalApplicationServiceTests : IDisposable
 
         var result = await ServiceOver(db).SaveResidenceAsync(
             new ResidenceInput(
-                0, application.Id, "3 Maple Way", null, "Eugene", "OR", "97401",
+                0, Guid.NewGuid(), application.Id, "3 Maple Way", null, "Eugene", "OR", "97401",
                 "Jo Marsh", "555-0122",
                 new DateOnly(2024, 1, 1),
                 new DateOnly(2024, 6, 1)),
@@ -376,7 +439,7 @@ public class RentalApplicationServiceTests : IDisposable
 
         await service.SaveResidenceAsync(
             new ResidenceInput(
-                0, application.Id, "3 Maple Way", null, "Eugene", "OR", "97401",
+                0, Guid.NewGuid(), application.Id, "3 Maple Way", null, "Eugene", "OR", "97401",
                 "Jo Marsh", "555-0122",
                 new DateOnly(2024, 1, 1),
                 new DateOnly(2024, 6, 1)),

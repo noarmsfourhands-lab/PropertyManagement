@@ -163,8 +163,6 @@ public class ReviewServiceTests : IDisposable
         await using var db = _database.CreateContext();
         var (applicationId, _) = await ClaimedApplicationAsync(db);
 
-        await ReviewOver(db).ClaimAsync(applicationId, TheManager);
-
         await using var other = _database.CreateContext();
         var refused = await ReviewOver(other).CompleteAsync(
             new ReviewInput(applicationId, ReviewOutcome.Approve, null), AnotherManager, TestData.Today);
@@ -179,7 +177,6 @@ public class ReviewServiceTests : IDisposable
         await using var db = _database.CreateContext();
         var (applicationId, _) = await ClaimedApplicationAsync(db);
 
-        await ReviewOver(db).ClaimAsync(applicationId, TheManager);
         var released = await ReviewOver(db).ReleaseAsync(applicationId, TheManager);
 
         Assert.True(released.Succeeded);
@@ -201,7 +198,6 @@ public class ReviewServiceTests : IDisposable
         await using var db = _database.CreateContext();
         var (applicationId, _) = await ClaimedApplicationAsync(db);
 
-        await ReviewOver(db).ClaimAsync(applicationId, TheManager);
         await ReviewOver(db).CompleteAsync(
             new ReviewInput(applicationId, ReviewOutcome.Approve, "Approved."),
             TheManager,

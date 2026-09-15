@@ -134,7 +134,7 @@ that runs migrations as its own step rather than letting several replicas race t
 dotnet test
 ```
 
-269 tests across three suites, none of which needs SQL Server:
+286 tests across three suites, none of which needs SQL Server:
 
 | Suite | What it covers |
 | --- | --- |
@@ -167,8 +167,9 @@ another's application gets 404 rather than 403, because a 403 would confirm the 
 The dependency arrows all point inward: the domain depends on nothing, the application layer on the
 domain, and infrastructure on both. Controllers and view models name only the application layer, so
 nothing outside infrastructure knows the data is in Entity Framework at all. The web project still
-references infrastructure, in one place: `Program.cs`, where the implementations are registered.
-Swapping a service for another implementation is a change to that file and to nothing else.
+references infrastructure in three files: `Program.cs`, where the implementations are registered,
+and two that use ASP.NET Identity to sign people in. Nothing that renders or validates names it, so
+swapping a service for another implementation is a change to the composition root and nothing else.
 
 ## Trying it out
 

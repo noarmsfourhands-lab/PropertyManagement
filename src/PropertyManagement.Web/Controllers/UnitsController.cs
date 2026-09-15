@@ -18,7 +18,10 @@ public class UnitsController(IPropertyService properties, TimeProvider timeProvi
     [HttpGet]
     public async Task<IActionResult> Browse(int page = 1, CancellationToken cancellationToken = default)
     {
-        var current = Math.Max(page, 1);
+        // Bounded above as well as below. (current - 1) * PageSize overflows for a large page
+        // number, wraps negative, and the service's own guard then throws rather than returning an
+        // empty page. A ceiling of a million pages is far past any real catalogue and cannot wrap.
+        var current = Math.Clamp(page, 1, 1_000_000);
         var today = DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime);
 
         // Availability, the count and the page are all decided by the database.

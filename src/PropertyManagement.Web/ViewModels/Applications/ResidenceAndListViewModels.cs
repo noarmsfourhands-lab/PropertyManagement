@@ -12,6 +12,13 @@ public class ResidenceFormViewModel
 {
     public int Id { get; set; }
 
+    /// <summary>
+    /// The row's concurrency token, round-tripped through a hidden field. Two applicants editing
+    /// the same residence each post every field the modal was opened with, so without this the
+    /// second save silently wrote the first one's corrections back out.
+    /// </summary>
+    public Guid Version { get; set; }
+
     public int ApplicationId { get; set; }
 
     [Required]
@@ -66,6 +73,7 @@ public class ResidenceFormViewModel
     public static ResidenceFormViewModel From(Residence residence) => new()
     {
         Id = residence.Id,
+        Version = residence.Version,
         ApplicationId = residence.RentalApplicationId,
         AddressLine1 = residence.AddressLine1,
         AddressLine2 = residence.AddressLine2,
@@ -79,7 +87,7 @@ public class ResidenceFormViewModel
     };
 
     public ResidenceInput ToInput() =>
-        new(Id, ApplicationId, AddressLine1, AddressLine2, City, State, PostalCode,
+        new(Id, Version, ApplicationId, AddressLine1, AddressLine2, City, State, PostalCode,
             LandlordName, LandlordPhone, MoveInDate!.Value, MoveOutDate);
 }
 

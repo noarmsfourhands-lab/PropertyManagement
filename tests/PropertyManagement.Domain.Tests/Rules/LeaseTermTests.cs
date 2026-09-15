@@ -17,12 +17,42 @@ public class LeaseTermTests
     }
 
     [Fact]
-    public void EndDateFor_clamps_a_leap_day_start_to_the_end_of_february()
+    public void EndDateFor_runs_a_leap_day_term_to_the_end_of_february()
     {
-        // 2024-02-29 plus twelve months has no 29th, so the term ends one day before 2025-02-28.
+        // The only start date whose twelve-month anniversary has to be clamped. 2024-02-29 plus
+        // twelve months is 2025-02-28, and that is where the term ends: taking a further day off
+        // would shorten it twice over, once by the clamp and once by the subtraction, leaving the
+        // unit available on 2025-02-28 while it was still under lease.
         var actual = LeaseTerm.EndDateFor(new DateOnly(2024, 2, 29));
 
-        Assert.Equal(new DateOnly(2025, 2, 27), actual);
+        Assert.Equal(new DateOnly(2025, 2, 28), actual);
+    }
+
+    [Fact]
+    public void A_leap_day_lease_still_covers_its_last_day()
+    {
+        var start = new DateOnly(2024, 2, 29);
+        var lease = new Lease { StartDate = start, EndDate = LeaseTerm.EndDateFor(start) };
+
+        // The day the bug gave away: the unit must not read as available until the term has run.
+        Assert.True(lease.CoversDate(new DateOnly(2025, 2, 28)));
+        Assert.False(lease.CoversDate(new DateOnly(2025, 3, 1)));
+        Assert.True(lease.CoversDate(start));
+    }
+
+    [Theory]
+    [InlineData("2026-01-01")]
+    [InlineData("2026-01-31")]
+    [InlineData("2026-02-28")]
+    [InlineData("2024-02-29")]
+    [InlineData("2026-12-31")]
+    public void A_term_never_ends_before_the_day_it_would_have_ended_without_clamping(string start)
+    {
+        var from = DateOnly.Parse(start);
+
+        // Whatever the month lengths do, the term reaches at least to the day before the plain
+        // one-year anniversary. This is the property the double subtraction broke.
+        Assert.True(LeaseTerm.EndDateFor(from) >= from.AddYears(1).AddDays(-1));
     }
 
     [Fact]

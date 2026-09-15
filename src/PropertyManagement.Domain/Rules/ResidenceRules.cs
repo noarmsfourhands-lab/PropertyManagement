@@ -17,8 +17,21 @@ public static class ResidenceRules
     /// which is allowed; a supplied one must fall on or after the move-in date, and neither date
     /// may be in the future.
     /// </summary>
+    /// <summary>
+    /// How far back a residence may reasonably reach. There was no floor at all, so a move-in date
+    /// of 0001-01-01 was accepted and rendered to a reviewer as "Jan 0001".
+    /// </summary>
+    public const int MaximumYearsAgo = 120;
+
     public static DomainResult ValidateDates(DateOnly moveInDate, DateOnly? moveOutDate, DateOnly asOf)
     {
+        if (moveInDate < asOf.AddYears(-MaximumYearsAgo))
+        {
+            return DomainResult.Failure(
+                $"Move-in date cannot be more than {MaximumYearsAgo} years ago.",
+                field: nameof(Residence.MoveInDate));
+        }
+
         if (moveInDate > asOf)
         {
             return DomainResult.Failure(

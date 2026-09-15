@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.ModelBinding;
 using PropertyManagement.Domain.Entities;
 using PropertyManagement.Domain.Enums;
 using PropertyManagement.Domain.Rules;
@@ -226,6 +227,20 @@ public class RentalApplicationsController(
         ApplicationContext context,
         CancellationToken cancellationToken)
     {
+        // Incomplete is the point of this action; unstorable is not. A missing required field is
+        // exactly what the applicant is putting down to come back to, but a value longer than its
+        // column or malformed for its type cannot be written at all, and saving without looking
+        // sent it to the database to fail there. That surfaced as a 500 on SQL Server and was
+        // invisible to the tests, because SQLite ignores column lengths.
+        ValidateOnlyCurrentSection(model.CurrentSection);
+        IgnoreMissingValues();
+
+        if (!ModelState.IsValid)
+        {
+            ReportProblems(context, model.CurrentSection);
+            return View(nameof(Edit), Rehydrate(model, context));
+        }
+
         var saved = model.CurrentSection switch
         {
             ApplicationSection.ApplicantInformation => await applications.SaveApplicantInformationAsync(
@@ -240,7 +255,10 @@ public class RentalApplicationsController(
                 requireComplete: false,
                 cancellationToken),
 
-            _ => Domain.Common.DomainResult.Success()
+            // The Summary holds nothing to save and the page never offers the button there, so a
+            // post claiming to save it did not come from this application. Answering "Saved." to
+            // it was the server confirming something it had not done.
+            _ => Domain.Common.DomainResult.Failure("That section has nothing to save.")
         };
 
         var reloaded = await contexts.LoadAsync(model.ApplicationId, User, cancellationToken) ?? context;
@@ -254,7 +272,6 @@ public class RentalApplicationsController(
 
         // Only the current section's rules are reported, so the reader is not told about a section
         // they are not looking at. The Summary is where the whole list belongs.
-        ValidateOnlyCurrentSection(model.CurrentSection);
         ReportProblems(reloaded, model.CurrentSection);
 
         TempData["StatusMessage"] = ModelState.IsValid
@@ -358,9 +375,17 @@ public class RentalApplicationsController(
         // rendered from the application itself, so reaching that path at all has to be earned.
         var context = await contexts.LoadAsync(id, User, cancellationToken);
 
-        if (context is null || !context.IsApplicantOn)
+        // Split, to give the same two answers its GET twin gives. A property manager may view an
+        // application and may not withdraw it, which is 403; somebody who may not see it at all is
+        // 404. Collapsing both into 404 told a manager the application did not exist.
+        if (context is null || !context.CanView)
         {
             return Hidden();
+        }
+
+        if (!context.IsApplicantOn)
+        {
+            return Forbid();
         }
 
         var result = await applications.WithdrawAsync(id, User.ToActor(), cancellationToken);
@@ -398,6 +423,28 @@ public class RentalApplicationsController(
         return section == ApplicationSection.ApplicantInformation
             ? carriesApplicantInformation
             : !carriesApplicantInformation;
+    }
+
+    /// <summary>
+    /// Drops the "this field is required" errors, leaving everything else.
+    ///
+    /// Saving for later exists so an applicant can put down a half-finished section, so emptiness
+    /// must not block it. Length, format and type errors are a different thing: the value cannot be
+    /// stored, and letting it through means the database refuses it instead, as an exception rather
+    /// than a message on the field.
+    /// </summary>
+    private void IgnoreMissingValues()
+    {
+        foreach (var (key, entry) in ModelState)
+        {
+            var blank = string.IsNullOrWhiteSpace(entry.AttemptedValue);
+
+            if (blank && entry.Errors.Count > 0)
+            {
+                entry.Errors.Clear();
+                entry.ValidationState = ModelValidationState.Valid;
+            }
+        }
     }
 
     /// <summary>

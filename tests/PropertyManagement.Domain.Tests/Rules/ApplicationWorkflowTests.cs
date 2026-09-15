@@ -193,11 +193,10 @@ public class ApplicationWorkflowTests
     {
         var claimed = ApplicationIn(ApplicationStatus.UnderReview, claimedBy: Manager);
 
-        Assert.True(ApplicationWorkflow.CanRelease(claimed).Succeeded);
-
         // Deliberately open to anyone. Claiming only works from Submitted, so restricting release
         // to the holder left an application stuck for every other manager the moment that one
-        // account became unavailable, with no way back.
+        // account became unavailable, with no way back. The rule takes no user id at all, which is
+        // the shape of "anyone may"; who is releasing only affects what the history records.
         Assert.True(ApplicationWorkflow.CanRelease(claimed).Succeeded);
         Assert.True(ApplicationWorkflow.IsClaimedBySomeoneElse(claimed, OtherManager));
         Assert.False(ApplicationWorkflow.IsClaimedBySomeoneElse(claimed, Manager));
