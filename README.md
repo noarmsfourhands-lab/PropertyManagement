@@ -18,18 +18,22 @@ Server, and ASP.NET Identity. No single-page application framework is used.
 ### SQL Server is not optional
 
 The application refuses to start without a reachable SQL Server instance, and says so plainly in
-the log rather than printing a provider stack trace. If no instance is installed yet, either will do:
-
-- **SQL Server Express** from the Microsoft download page. During setup, include the **LocalDB**
-  feature to get the `(localdb)\MSSQLLocalDB` instance the default connection string points at.
-- **LocalDB on its own**, which ships with the SQL Server Express installer and with the Visual
-  Studio *Data storage and processing* workload.
-
-Confirm the instance is there before running:
+the log rather than printing a provider stack trace. If you do not already have one:
 
 ```bash
-sqllocaldb info
+winget install --id Microsoft.SQLServer.2025.Express --accept-package-agreements
 ```
+
+That installs the `SQLEXPRESS` instance the default connection string points at. Confirm it is
+running before starting the application:
+
+```bash
+powershell -Command "Get-Service 'MSSQL$SQLEXPRESS'"
+```
+
+LocalDB works equally well if you already have it, for instance from the Visual Studio *Data
+storage and processing* workload. Point the connection string at
+`Server=(localdb)\MSSQLLocalDB;...` instead.
 
 Install the EF Core tooling if it is not already present:
 
@@ -47,16 +51,16 @@ dotnet tool update --global dotnet-ef
 ## Database setup
 
 The connection string lives under `ConnectionStrings:DefaultConnection` in
-`src/PropertyManagement.Web/appsettings.json` and defaults to SQL Server LocalDB:
-
-```
-Server=(localdb)\MSSQLLocalDB;Database=PropertyManagement;Trusted_Connection=True;MultipleActiveResultSets=true;TrustServerCertificate=True
-```
-
-Point it at whichever instance you have. For SQL Server Express:
+`src/PropertyManagement.Web/appsettings.json` and defaults to SQL Server Express:
 
 ```
 Server=localhost\SQLEXPRESS;Database=PropertyManagement;Trusted_Connection=True;MultipleActiveResultSets=true;TrustServerCertificate=True
+```
+
+Point it at whichever instance you have. For LocalDB:
+
+```
+Server=(localdb)\MSSQLLocalDB;Database=PropertyManagement;Trusted_Connection=True;MultipleActiveResultSets=true;TrustServerCertificate=True
 ```
 
 Rather than editing the checked-in file, prefer a local override that git ignores:
