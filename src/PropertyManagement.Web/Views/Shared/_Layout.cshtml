@@ -12,10 +12,12 @@
         <nav class="navbar navbar-expand-sm navbar-light bg-white border-bottom mb-4">
             <div class="container">
                 <a class="navbar-brand fw-semibold" asp-controller="Home" asp-action="Index">Property Management</a>
-                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target=".navbar-collapse">
+                <button class="navbar-toggler" type="button" data-bs-toggle="collapse"
+                        data-bs-target=".navbar-collapse" aria-controls="navbarContent"
+                        aria-expanded="false" aria-label="Toggle navigation">
                     <span class="navbar-toggler-icon"></span>
                 </button>
-                <div class="navbar-collapse collapse d-sm-inline-flex justify-content-between">
+                <div class="navbar-collapse collapse d-sm-inline-flex justify-content-between" id="navbarContent">
                     <ul class="navbar-nav flex-grow-1">
                         @if (User.Identity?.IsAuthenticated == true)
                         {
@@ -50,7 +52,9 @@
     </div>
 
     <!-- One modal shell for the whole page; controller actions supply its contents. -->
-    <div class="modal fade" id="app-modal" tabindex="-1" aria-hidden="true">
+    @* Named by whichever title the partial inside supplies; every modal partial gives its
+       heading this id, so the dialog is announced with a name rather than as "dialog". *@
+    <div class="modal fade" id="app-modal" tabindex="-1" aria-hidden="true" aria-labelledby="app-modal-title">
         <div class="modal-dialog modal-dialog-centered modal-lg">
             <div class="modal-content"></div>
         </div>

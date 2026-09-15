@@ -134,12 +134,24 @@ model and a section partial can bind to.
 requirement: a unit whose lease term covers today is not available. A leap-day start clamps the way
 `AddMonths` clamps, and there is a test pinning that behaviour so it cannot change silently.
 
-**A second lease is impossible at the database level.** Availability is checked at submit and again
-at approval, but two approvals racing each other would both pass a check-then-write. The unique
-index on `Leases.RentalApplicationId` is the guard that actually holds, and the approval path
-treats a unique violation as the same rejection the check would have produced. Other open
-applications for the unit are deliberately left alone, as the requirements ask, and a test asserts
-that the losing application is still exactly where it was.
+**A second lease for a unit is impossible at the database level.** Availability is checked at
+submit and again at approval, but two approvals racing each other would both read the unit's leases
+before either wrote, so both would pass. The guard that actually holds is a unique index on
+`Leases(UnitId, StartDate)`.
+
+It closes the race exactly because approval dates the lease the day it is granted. Two approvals on
+the same day for one unit collide on the index, and the loser is told the same thing the
+availability check would have told them. An approval on a later day is stopped by the availability
+check instead, because the first lease still covers that day. The two together leave no gap, and
+the pairing is worth stating plainly: the index alone would not stop overlapping terms starting on
+different days, and nothing in the system can produce those.
+
+The violation is recognised by SQL Server's error number rather than its message, because those
+messages are localised. Reading them would work on an English server and quietly stop working on
+any other, turning a handled race into an unhandled error.
+
+Other open applications for the unit are deliberately left alone, as the requirements ask, and a
+test asserts that the losing application is still exactly where it was.
 
 **Unit types deactivate, they never delete.** A unit already carrying a retired type keeps a valid
 reference, and `UnitTypeSelection.SelectableFor` builds the dropdown: every active type, plus the
@@ -157,21 +169,37 @@ true when the action happened, so a renamed or removed account does not rewrite 
 travels in the sign-in cookie via `ApplicationUserClaimsPrincipalFactory`, so writing an entry
 costs no extra query.
 
-**Per-section concurrency tokens.** SQL Server allows one `rowversion` per table, and a single
-token would make any two concurrent saves collide. Applicant information and residence history each
-carry their own GUID token marked as a concurrency token, and a save passes the version the page was
-rendered with. Two applicants saving different sections do not interfere; a second save of the same
-stale section is rejected with a message to reload rather than silently overwriting. Both halves of
-that are tested.
+**Per-section concurrency tokens, and what they do not cover.** SQL Server allows one `rowversion`
+per table, and a single token would make any two concurrent saves collide. Applicant information
+and residence history each carry their own GUID token, and a save passes back the version the page
+was rendered with, so a save built on a stale copy of a section changes nothing and says so rather
+than overwriting the other person's work. Both halves of that are tested.
+
+Two honest limits. EF puts every concurrency token on an entity into the `WHERE` clause of any
+update to it, so the isolation between the two sections holds because each service method re-reads
+the row immediately before writing, not because EF has been told to check only one. And the tokens
+rotate only when a section is saved: the other writes to an application, such as claiming or
+deciding it, leave them untouched, so those paths are last-write-wins. That is tolerable because
+each is already guarded by a status check that a second actor fails, but it is a narrower promise
+than "the row is protected", and worth saying so rather than implying otherwise.
 
 **Indexes follow the queries the requirements name.** The application list filters by status and by
 property, and the property is reached through the unit, so there are indexes on `Status` and on
 `(UnitId, Status)`, and the applicant join is indexed by user id. Availability is answered by "does
 any lease for this unit cover today", so the lease index leads with the unit and carries the term.
 
+**The default list ordering is deliberately unindexed.** The list orders by whichever of the
+submission or creation time is set, which is a `COALESCE` that no index can serve directly. At this
+size a scan is the right answer, and an index over one of the two columns would be worse than none
+because it would look like coverage without providing it. If the table ever grew enough to matter,
+the fix is a persisted computed column over the same expression with an index on that.
+
 **Delete behaviour avoids multiple cascade paths.** Units and applications restrict rather than
 cascade, because SQL Server rejects a schema where the same row can be reached by two cascade paths.
-The collections genuinely owned by an application do cascade.
+The collections genuinely owned by an application do cascade, including its audit trail. That is
+deliberate rather than an oversight: nothing in the application deletes an application, so the trail
+outlives everything that can actually happen to one. A system that did delete them would want the
+trail kept and the row soft-deleted instead.
 
 ## Security posture
 
@@ -207,16 +235,23 @@ Two suites, because they answer different questions.
 
 | Suite | What it proves | Count |
 | --- | --- | --- |
-| `PropertyManagement.Domain.Tests` | The business rules are right, as plain function calls | 114 |
-| `PropertyManagement.Infrastructure.Tests` | The model, queries and services work against a real relational database | 77 |
+| `PropertyManagement.Domain.Tests` | The business rules are right, as plain function calls | 122 |
+| `PropertyManagement.Infrastructure.Tests` | The model, queries and services work against a real relational database | 79 |
 | `PropertyManagement.Web.Tests` | Section validation and what the wizard offers | 15 |
 
 The integration suite runs on SQLite held in memory, which enforces keys, unique indexes and
 optimistic concurrency the way a server does while needing nothing installed. It is what proves the
 schema builds, the queries translate, the concurrency tokens behave as configured, and the seeder is
 idempotent. The application itself runs on SQL Server, as required, and the first run there was
-checked by hand: the database was created, the migration applied, and a second start applied no
+checked by hand: the database was created, the migrations applied, and a second start applied no
 migration and created nothing.
+
+What that suite cannot see is worth naming. SQLite has no `nvarchar(max)` and no decimal precision,
+so column sizing is invisible to it; its planner says nothing about SQL Server's, so a missing index
+is invisible too; `EnsureCreated` builds from the model rather than from the migrations, so
+migration drift would not surface there; and because every test context shares one connection, the
+read-then-write races are serialised and cannot be reproduced. Those are the first places to look
+if something ever behaves differently in production than in the suite.
 
 ## The grid and its endpoint
 
@@ -288,7 +323,7 @@ action for giving the whole thing up.
 | Migrations applied and database created on start | `Program.cs` start-up scope | Done |
 | Idempotent seeding with Bogus, every status | `DatabaseSeeder` | Done |
 | ASP.NET Identity for users and roles | `DependencyInjection.AddInfrastructure` | Done |
-| Unit tests for business logic | 153 tests across two suites | Done |
+| Unit tests for business logic | 216 tests across three suites | Done |
 | Sign up, log in, log out with role choice | `AccountController` | Done |
 | Properties and units maintained through modals | `PropertiesController` | Done |
 | Partial views and view components | Section and modal partials; two view components | Done |

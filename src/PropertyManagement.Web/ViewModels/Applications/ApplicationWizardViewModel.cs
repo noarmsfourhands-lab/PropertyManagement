@@ -213,13 +213,23 @@ public class ApplicationWizardViewModel
     /// the others open only once the work before them has been saved, so the indicator cannot be
     /// used to skip past a section the server has not accepted.
     /// </summary>
-    public bool IsSectionReachable(ApplicationSection section) => section switch
+    public bool IsSectionReachable(ApplicationSection section)
     {
-        ApplicationSection.ApplicantInformation => true,
-        ApplicationSection.ResidenceHistory => ApplicantInformationSaved,
-        ApplicationSection.Summary => ApplicantInformationSaved && ResidenceHistorySaved,
-        _ => false
-    };
+        // Nothing but the Summary is reachable on an application that cannot be edited, so the
+        // indicator does not render links that would only bounce back to where they started.
+        if (!CanEdit)
+        {
+            return section == ApplicationSection.Summary;
+        }
+
+        return section switch
+        {
+            ApplicationSection.ApplicantInformation => true,
+            ApplicationSection.ResidenceHistory => ApplicantInformationSaved,
+            ApplicationSection.Summary => ApplicantInformationSaved && ResidenceHistorySaved,
+            _ => false
+        };
+    }
 
     /// <summary>The label a section is shown under.</summary>
     public static string LabelFor(ApplicationSection section) => section switch

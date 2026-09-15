@@ -92,12 +92,16 @@ public class RentalApplicationsController(
             return Forbid();
         }
 
+        var model = BuildModel(context, ApplicationSection.Summary);
+
         var target = section ?? ApplicationWizardViewModel.DefaultSectionFor(
             context.Application,
             context.IsApplicantOn);
 
-        // A section only reachable by editing is not shown to someone who cannot edit.
-        if (!context.CanEdit && target != ApplicationSection.Summary)
+        // A section only reachable by editing is not shown to someone who cannot edit, and a
+        // section the server has not accepted yet is not reachable by typing its name into the
+        // address bar either. Both fall back to the Summary, which shows everything.
+        if (!context.CanEdit || !model.IsSectionReachable(target))
         {
             target = ApplicationSection.Summary;
         }
@@ -143,6 +147,15 @@ public class RentalApplicationsController(
         {
             TempData["ErrorMessage"] = $"An application in {context.Application.Status} status cannot be changed.";
             return RedirectToAction(nameof(Edit), new { id = model.ApplicationId });
+        }
+
+        // Which section is being written comes from a posted field, so the post has to look like
+        // it came from that section's form. Without this, a post from the residence history page
+        // claiming to be applicant information would blank every applicant field, and one claiming
+        // the reverse would silently drop what the user had just typed and advance anyway.
+        if (command != WizardCommand.Submit && !PostCameFromSection(model.CurrentSection))
+        {
+            return BadRequest();
         }
 
         return command switch
@@ -337,17 +350,19 @@ public class RentalApplicationsController(
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Withdraw(int id, CancellationToken cancellationToken)
     {
+        // Checked before the service is called, not only after it refuses. The rejection is
+        // rendered from the application itself, so reaching that path at all has to be earned.
+        var context = await LoadAsync(id, cancellationToken);
+
+        if (context is null || !context.IsApplicantOn)
+        {
+            return NotFoundOrForbid(context is not null);
+        }
+
         var result = await applications.WithdrawAsync(id, User.ToActor(), cancellationToken);
 
         if (result.Failed)
         {
-            var context = await LoadAsync(id, cancellationToken);
-
-            if (context is null)
-            {
-                return NotFound();
-            }
-
             AddError(null, result.Error!);
             return ModalValidationFailed("_ConfirmWithdraw", context.Application);
         }
@@ -454,18 +469,27 @@ public class RentalApplicationsController(
         int applicationId,
         CancellationToken cancellationToken)
     {
+        // Guarded before the service call, matching the GET twin. Without this a signed-in
+        // applicant could post another applicant's residence id and read their address back out
+        // of the rejection that the service correctly produced.
+        var context = await LoadAsync(applicationId, cancellationToken);
+
+        if (context is null || !context.CanEdit)
+        {
+            return NotFoundOrForbid(context is not null);
+        }
+
+        var residence = context.Application.Residences.FirstOrDefault(entity => entity.Id == id);
+
+        if (residence is null)
+        {
+            return NotFound();
+        }
+
         var result = await applications.DeleteResidenceAsync(id, User.GetUserId(), cancellationToken);
 
         if (result.Failed)
         {
-            var context = await LoadAsync(applicationId, cancellationToken);
-            var residence = context?.Application.Residences.FirstOrDefault(entity => entity.Id == id);
-
-            if (residence is null)
-            {
-                return NotFound();
-            }
-
             AddError(null, result.Error!);
             return ModalValidationFailed("_ConfirmDeleteResidence", residence);
         }
@@ -503,6 +527,26 @@ public class RentalApplicationsController(
     }
 
     // ---------------------------------------------------------------- Helpers
+
+    /// <summary>
+    /// Whether the posted form is the one the claimed section renders.
+    ///
+    /// Applicant information is the only section with fields of its own, so its form is the only
+    /// one that carries keys under that prefix. A post claiming to be that section without them,
+    /// or claiming to be another section while carrying them, did not come from the page it says
+    /// it did.
+    /// </summary>
+    private bool PostCameFromSection(ApplicationSection section)
+    {
+        var prefix = $"{nameof(ApplicationWizardViewModel.ApplicantInformation)}.";
+
+        var carriesApplicantInformation = Request.HasFormContentType
+            && Request.Form.Keys.Any(key => key.StartsWith(prefix, StringComparison.Ordinal));
+
+        return section == ApplicationSection.ApplicantInformation
+            ? carriesApplicantInformation
+            : !carriesApplicantInformation;
+    }
 
     /// <summary>
     /// Only the section on screen is validated. The others were never posted, so their required
@@ -547,6 +591,12 @@ public class RentalApplicationsController(
         model.Rehydrate(context.Application, context.IsApplicantOn, context.IsManager, context.UserId);
         return model;
     }
+
+    /// <summary>
+    /// How to answer a request for something the caller may not have. Both cases return the same
+    /// status, so walking ids tells an outsider nothing about which applications exist.
+    /// </summary>
+    private IActionResult NotFoundOrForbid(bool exists) => exists ? Forbid() : NotFound();
 
     private async Task<ApplicationContext?> LoadAsync(int id, CancellationToken cancellationToken)
     {

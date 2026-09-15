@@ -135,8 +135,17 @@ public class RentalApplicationService(PropertyManagementDbContext db, TimeProvid
     private const string StaleSaveMessage =
         "Someone else saved this section while you were editing. Reload the page and apply your changes again.";
 
+    /// <summary>
+    /// Loads an application for display and for permission checks.
+    ///
+    /// Untracked on purpose. A tracked read consults the change tracker first, so after a save
+    /// that was rejected this would return the rejected values still sitting on the entity rather
+    /// than what is actually stored, and the page would re-render showing the change it had just
+    /// refused to make.
+    /// </summary>
     public async Task<RentalApplication?> GetAsync(int id, CancellationToken cancellationToken = default) =>
         await db.RentalApplications
+            .AsNoTracking()
             .Include(application => application.Unit)
                 .ThenInclude(unit => unit.Property)
             .Include(application => application.Unit)
@@ -144,6 +153,9 @@ public class RentalApplicationService(PropertyManagementDbContext db, TimeProvid
             .Include(application => application.Residences)
             .Include(application => application.Applicants)
             .Include(application => application.Lease)
+            // Two collection includes in one statement return their cross product, repeating the
+            // whole application and unit payload for every pairing. Split into one query each.
+            .AsSplitQuery()
             .FirstOrDefaultAsync(application => application.Id == id, cancellationToken);
 
     /// <summary>
@@ -428,6 +440,9 @@ public class RentalApplicationService(PropertyManagementDbContext db, TimeProvid
 
         var application = await db.RentalApplications
             .Include(entity => entity.Applicants)
+            // Residences are loaded because whether the section is complete is part of whether
+            // the application may be submitted at all.
+            .Include(entity => entity.Residences)
             .Include(entity => entity.Unit)
                 .ThenInclude(unit => unit.Leases)
             .FirstOrDefaultAsync(entity => entity.Id == applicationId, cancellationToken);

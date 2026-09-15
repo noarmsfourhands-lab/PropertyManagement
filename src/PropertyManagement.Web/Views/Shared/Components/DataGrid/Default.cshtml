@@ -69,17 +69,32 @@
                 <tr>
                 @foreach (var column in Model.Columns)
                 {
-                    <th scope="col"
-                        class="@(column.Align == DataGridAlign.End ? "text-end" : null)"
-                        aria-sort="none"
-                        @(column.Sortable ? "data-grid-sort=" + column.Sort : null)
-                        style="@(column.Sortable ? "cursor: pointer" : null)">
-                        @column.Header
-                        @if (column.Sortable)
-                        {
-                            <span class="text-muted small ms-1" data-grid-arrow></span>
-                        }
-                    </th>
+                    @*
+                        Two branches rather than one heading with conditional attributes: a
+                        conditional inside an attribute value still emits the attribute, which
+                        would announce every column as sortable. The control is a real button so
+                        the column can be sorted from the keyboard as well as the mouse.
+                    *@
+                    @if (column.Sortable)
+                    {
+                        <th scope="col"
+                            class="@(column.Align == DataGridAlign.End ? "text-end" : null)"
+                            aria-sort="none"
+                            data-grid-sort="@column.Sort">
+                            <button type="button"
+                                    class="btn btn-link btn-sm p-0 text-decoration-none text-reset fw-bold"
+                                    data-grid-sort-button>
+                                @column.Header
+                                <span class="text-muted small ms-1" data-grid-arrow aria-hidden="true"></span>
+                            </button>
+                        </th>
+                    }
+                    else
+                    {
+                        <th scope="col" class="@(column.Align == DataGridAlign.End ? "text-end" : null)">
+                            @column.Header
+                        </th>
+                    }
                 }
                 </tr>
             </thead>
@@ -91,6 +106,12 @@
     <div class="card-body text-center text-muted py-5" data-grid-status role="status" aria-live="polite">
         @Model.LoadingMessage
     </div>
+
+    <noscript>
+        <div class="card-body text-center text-muted py-4">
+            <p class="mb-0">This list needs JavaScript, because its rows are fetched as data.</p>
+        </div>
+    </noscript>
 
     <div class="card-footer bg-white d-flex justify-content-between align-items-center" data-grid-pager hidden>
         <span class="text-muted small" data-grid-summary></span>

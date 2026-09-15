@@ -21,7 +21,21 @@ public class ApplicationWorkflowTests
             Status = status,
             ApplicantInformationSavedAtUtc = applicantInformationSaved ? DateTime.UtcNow : null,
             ResidenceHistorySavedAtUtc = residenceHistorySaved ? DateTime.UtcNow : null,
-            ClaimedByUserId = claimedBy
+            ClaimedByUserId = claimedBy,
+            // Complete on purpose. These tests are about which statuses permit which actions, so
+            // the contents must not be what stops them; completeness has its own tests.
+            ApplicantInformation = new ApplicantInformation
+            {
+                FirstName = "Robin",
+                LastName = "Alvarez",
+                Phone = "555-0100",
+                Email = "robin@example.com",
+                AddressLine1 = "4 Cedar Lane",
+                City = "Portland",
+                State = "OR",
+                PostalCode = "97202"
+            },
+            Residences = [new Residence { MoveInDate = new DateOnly(2024, 1, 1) }]
         };
 
     [Theory]

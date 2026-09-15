@@ -1,3 +1,4 @@
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using PropertyManagement.Domain.Common;
 using PropertyManagement.Domain.Entities;
@@ -215,19 +216,33 @@ public class ReviewService(PropertyManagementDbContext db, TimeProvider timeProv
         }
         catch (DbUpdateException exception) when (IsDuplicateLease(exception))
         {
-            // Two approvals raced. The unique index on the lease is what actually prevents the
-            // second one, so the loser is reported the same way the availability check reports.
+            // Two approvals raced: both read the unit's leases before either wrote, so both got
+            // past the availability check above. The unique index on the unit and the lease start
+            // date is what actually stops the second insert, and the loser is told the same thing
+            // the check would have told them.
             return DomainResult.Failure(
                 "This unit already has an active lease, so this application cannot be approved.");
         }
     }
 
+    /// <summary>SQL Server's codes for a violated unique index and a violated unique constraint.</summary>
+    private const int DuplicateKeyError = 2601;
+
+    private const int UniqueConstraintError = 2627;
+
     /// <summary>
-    /// A unique-constraint violation on the lease table means another approval got there first.
-    /// Matched on the constraint rather than a provider error number so the intent stays readable.
+    /// Whether the failure was another approval getting to this unit first.
+    ///
+    /// Matched on the error number rather than the message. SQL Server localises its messages, so
+    /// reading them would work on an English installation and quietly stop working on any other,
+    /// turning a handled race into an unhandled error. The message fallback covers providers that
+    /// report no number, which is what the test database does.
     /// </summary>
-    private static bool IsDuplicateLease(DbUpdateException exception) =>
-        exception.InnerException?.Message.Contains("Leases", StringComparison.OrdinalIgnoreCase) == true
-        && (exception.InnerException.Message.Contains("duplicate", StringComparison.OrdinalIgnoreCase)
-            || exception.InnerException.Message.Contains("unique", StringComparison.OrdinalIgnoreCase));
+    private static bool IsDuplicateLease(DbUpdateException exception) => exception.InnerException switch
+    {
+        SqlException sql => sql.Number is DuplicateKeyError or UniqueConstraintError,
+        { } inner => inner.Message.Contains("Leases", StringComparison.OrdinalIgnoreCase)
+            && inner.Message.Contains("unique", StringComparison.OrdinalIgnoreCase),
+        _ => false
+    };
 }

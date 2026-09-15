@@ -4,10 +4,10 @@
 @* No refresh target: a decision changes the whole page, so the browser reloads it. *@
 <form asp-action="Complete" method="post" data-modal-form>
     @Html.AntiForgeryToken()
-    <input type="hidden" asp-for="ApplicationId" />
+    <input type="hidden" asp-for="ApplicationId" id="modal-ApplicationId" />
 
     <div class="modal-header">
-        <h5 class="modal-title">Complete review</h5>
+        <h5 class="modal-title" id="app-modal-title">Complete review</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
     </div>
 

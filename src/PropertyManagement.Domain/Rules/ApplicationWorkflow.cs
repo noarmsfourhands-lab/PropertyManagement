@@ -80,9 +80,17 @@ public static class ApplicationWorkflow
     }
 
     /// <summary>
-    /// Submit is offered from the Summary only once both sections have been saved. The unit's
-    /// availability is checked separately because it needs the unit's leases.
+    /// Whether the application may be submitted.
+    ///
+    /// Both sections must have been saved and both must actually be complete. Those stopped being
+    /// the same question once a section could be deliberately saved while still unfinished, so
+    /// this asks both. The unit's availability is checked separately, because it needs the unit's
+    /// leases rather than the application.
     /// </summary>
+    /// <param name="application">
+    /// Must have its <see cref="RentalApplication.Residences"/> loaded, since their number is part
+    /// of the answer.
+    /// </param>
     public static DomainResult CanSubmit(RentalApplication application, bool isApplicantOnApplication)
     {
         ArgumentNullException.ThrowIfNull(application);
@@ -92,7 +100,11 @@ public static class ApplicationWorkflow
             return DomainResult.Failure("Only an applicant on this application can submit it.");
         }
 
-        if (!IsAllowed(application.Status, ApplicationStatus.Submitted))
+        // Deliberately the editable statuses rather than "is a move to Submitted legal", because
+        // Under Review has a legal move to Submitted: that is a manager releasing their claim.
+        // Asking the looser question would let an applicant pull an application back out from
+        // under the manager reviewing it, leaving the claim pointing at a live review.
+        if (!EditableStatuses.Contains(application.Status))
         {
             return DomainResult.Failure($"An application in {application.Status} status cannot be submitted.");
         }
@@ -102,9 +114,20 @@ public static class ApplicationWorkflow
             return DomainResult.Failure("Applicant Information must be saved before submitting.");
         }
 
-        return application.ResidenceHistorySaved
-            ? DomainResult.Success()
-            : DomainResult.Failure("Residence History must be saved before submitting.");
+        if (!application.ResidenceHistorySaved)
+        {
+            return DomainResult.Failure("Residence History must be saved before submitting.");
+        }
+
+        // Saved is not the same as finished: a section can be put down half done on purpose.
+        var information = ApplicantInformationRules.Validate(application.ApplicantInformation);
+
+        if (information.Failed)
+        {
+            return information;
+        }
+
+        return ResidenceRules.ValidateHistory([.. application.Residences]);
     }
 
     public static DomainResult CanWithdraw(RentalApplication application, bool isApplicantOnApplication)

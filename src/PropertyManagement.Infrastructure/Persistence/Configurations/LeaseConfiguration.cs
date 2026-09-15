@@ -21,9 +21,13 @@ public class LeaseConfiguration : IEntityTypeConfiguration<Lease>
         builder.Property(lease => lease.MonthlyRent).HasPrecision(18, 2).IsRequired();
 
 
-        // Availability is answered by "does any lease for this unit cover today", so the index
-        // leads with the unit and carries the term.
-        builder.HasIndex(lease => new { lease.UnitId, lease.StartDate, lease.EndDate });
+        // Two jobs at once. Availability is answered by "does any lease for this unit cover
+        // today", so the index leads with the unit and carries the start of the term. Unique,
+        // because approval always dates the lease the day it is granted: two managers approving
+        // two applications for the same unit at the same moment both pass the availability check,
+        // and this is what stops the second insert. A later approval on a different day is stopped
+        // by the availability check instead, because the first lease covers that day.
+        builder.HasIndex(lease => new { lease.UnitId, lease.StartDate }).IsUnique();
 
         builder.HasIndex(lease => lease.RentalApplicationId).IsUnique();
 

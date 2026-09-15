@@ -100,7 +100,7 @@ set `Seeding:Enabled` to `false` to apply migrations without writing demo data.
 dotnet test
 ```
 
-206 tests across three suites, none of which needs SQL Server:
+216 tests across three suites, none of which needs SQL Server:
 
 | Suite | What it covers |
 | --- | --- |

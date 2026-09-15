@@ -20,6 +20,8 @@ public class UnitTypeConfiguration : IEntityTypeConfiguration<UnitType>
         builder.Property(unitType => unitType.IsActive).IsRequired();
 
         builder.HasIndex(unitType => unitType.Name).IsUnique();
-        builder.HasIndex(unitType => unitType.IsActive);
+
+        // No index on IsActive on purpose: this is a handful of rows, so any plan is a scan and an
+        // index would only cost writes.
     }
 }

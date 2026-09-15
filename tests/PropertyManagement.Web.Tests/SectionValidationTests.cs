@@ -183,10 +183,11 @@ public class WizardOfferTests
     {
         var model = ModelFor(SavedButIncomplete(), ApplicationSection.Summary);
 
-        // The workflow rule is satisfied, because both sections have been saved.
-        Assert.Null(model.SubmitBlockedReason);
+        // Both sections have been saved, so the flags alone would have allowed this. The rule
+        // asks whether they are finished as well, and says so.
+        Assert.Equal("Applicant Information is not complete.", model.SubmitBlockedReason);
 
-        // Submission is still refused, because the saved contents are not yet right.
+        // The page additionally lists what is wrong, field by field.
         Assert.NotEmpty(model.Problems);
         Assert.False(model.CanSubmit);
     }

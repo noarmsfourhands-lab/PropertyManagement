@@ -55,14 +55,24 @@
     function showError(message) {
         setModalContent(
             '<div class="modal-header"><h5 class="modal-title">Something went wrong</h5>' +
-            '<button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>' +
+            '<button type="button" class="btn-close" data-bs-dismiss="modal" ' +
+            'aria-label="Close"></button></div>' +
             '<div class="modal-body"><p class="mb-0">' + message + '</p></div>');
         modal.show();
     }
 
+    var latestOpen = 0;
+
     async function openModal(url) {
+        var request = ++latestOpen;
+
         try {
             var response = await fetch(url, { headers: ajaxHeaders(), credentials: 'same-origin' });
+
+            /* A second trigger was clicked while this was in flight; that one wins. */
+            if (request !== latestOpen) {
+                return;
+            }
 
             if (!response.ok) {
                 showError('That form could not be opened. Refresh the page and try again.');
@@ -76,33 +86,44 @@
         }
     }
 
-    /* Replaces one region of the page with freshly rendered markup from the server. */
+    /* Replaces one region of the page with freshly rendered markup from the server.
+
+       It never throws. By the time this runs the change has already been saved, so a failure here
+       is only about what is on screen, and the honest recovery is to reload and show the truth
+       rather than to report a save that did not fail. */
     async function refreshRegion(targetSelector, url) {
-        if (!targetSelector || !url) {
+        var target = targetSelector ? document.querySelector(targetSelector) : null;
+
+        if (!target || !url) {
             window.location.reload();
             return;
         }
 
-        var target = document.querySelector(targetSelector);
-        if (!target) {
+        try {
+            var response = await fetch(url, { headers: ajaxHeaders(), credentials: 'same-origin' });
+
+            if (!response.ok) {
+                window.location.reload();
+                return;
+            }
+
+            target.innerHTML = await response.text();
+        } catch (error) {
             window.location.reload();
-            return;
         }
-
-        var response = await fetch(url, { headers: ajaxHeaders(), credentials: 'same-origin' });
-
-        if (!response.ok) {
-            window.location.reload();
-            return;
-        }
-
-        target.innerHTML = await response.text();
     }
 
-    /* A message rendered before the modal opened can be answered by what the modal just did,
-       so the page marks those elements and they are cleared once a save succeeds. */
-    function clearStaleMessages() {
-        document.querySelectorAll('[data-clear-on-success]').forEach(function (element) {
+    /* A message rendered before the modal opened can be answered by what the modal just did.
+       The form names which message its save invalidates, so adding a note cannot wipe a message
+       about the application's own sections. */
+    function clearStaleMessages(form) {
+        var selector = form.getAttribute('data-clears');
+
+        if (!selector) {
+            return;
+        }
+
+        document.querySelectorAll(selector).forEach(function (element) {
             // Hidden as well as emptied: the validation summary is only rendered at all when it
             // has something to say, so emptying it alone would leave a bare alert box behind.
             element.innerHTML = '';
@@ -124,6 +145,7 @@
         dismiss.type = 'button';
         dismiss.className = 'btn-close';
         dismiss.setAttribute('data-bs-dismiss', 'alert');
+        dismiss.setAttribute('aria-label', 'Dismiss');
         banner.appendChild(dismiss);
 
         var host = document.querySelector('main') || document.body;
@@ -183,7 +205,7 @@
             var result = await response.json();
 
             modal.hide();
-            clearStaleMessages();
+            clearStaleMessages(form);
             await refreshRegion(
                 result.target || form.getAttribute('data-refresh-target'),
                 result.refreshUrl || form.getAttribute('data-refresh-url'));

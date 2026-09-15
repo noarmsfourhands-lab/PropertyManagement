@@ -14,14 +14,36 @@ namespace PropertyManagement.Infrastructure.Persistence;
 /// never has one.
 /// </summary>
 public class UtcDateTimeConverter() : ValueConverter<DateTime, DateTime>(
-    value => value.Kind == DateTimeKind.Utc ? value : value.ToUniversalTime(),
-    value => DateTime.SpecifyKind(value, DateTimeKind.Utc));
+    value => Normalise(value),
+    value => DateTime.SpecifyKind(value, DateTimeKind.Utc))
+{
+    /// <summary>
+    /// A Local value is converted; anything else is taken at face value as UTC.
+    ///
+    /// The tempting spelling is ToUniversalTime for everything that is not already UTC, but that
+    /// reads an Unspecified value as server local time, so the instant stored would depend on the
+    /// machine's timezone and two servers in different regions would write different rows for the
+    /// same input. Every value in this model comes from an injected clock as UTC; the ones that
+    /// arrive Unspecified are defaults and model-bound values, which are meant as UTC too.
+    /// </summary>
+    private static DateTime Normalise(DateTime value) => value.Kind switch
+    {
+        DateTimeKind.Utc => value,
+        DateTimeKind.Local => value.ToUniversalTime(),
+        _ => DateTime.SpecifyKind(value, DateTimeKind.Utc)
+    };
+}
 
 /// <inheritdoc cref="UtcDateTimeConverter"/>
 public class NullableUtcDateTimeConverter() : ValueConverter<DateTime?, DateTime?>(
-    value => value == null
-        ? null
-        : value.Value.Kind == DateTimeKind.Utc ? value : value.Value.ToUniversalTime(),
-    value => value == null
-        ? null
-        : DateTime.SpecifyKind(value.Value, DateTimeKind.Utc));
+    value => value == null ? null : Normalise(value.Value),
+    value => value == null ? null : DateTime.SpecifyKind(value.Value, DateTimeKind.Utc))
+{
+    /// <inheritdoc cref="UtcDateTimeConverter"/>
+    private static DateTime Normalise(DateTime value) => value.Kind switch
+    {
+        DateTimeKind.Utc => value,
+        DateTimeKind.Local => value.ToUniversalTime(),
+        _ => DateTime.SpecifyKind(value, DateTimeKind.Utc)
+    };
+}
