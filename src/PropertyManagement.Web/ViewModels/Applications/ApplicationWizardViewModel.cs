@@ -2,7 +2,7 @@ using System.ComponentModel.DataAnnotations;
 using PropertyManagement.Domain.Entities;
 using PropertyManagement.Domain.Enums;
 using PropertyManagement.Domain.Rules;
-using PropertyManagement.Infrastructure.Services;
+using PropertyManagement.Application.Services;
 
 namespace PropertyManagement.Web.ViewModels.Applications;
 
@@ -190,7 +190,12 @@ public class ApplicationWizardViewModel
 
     public bool CanRelease { get; private set; }
 
-    public bool ShowBack => ApplicationWizard.Previous(CurrentSection) is not null;
+    /// <summary>
+    /// Back is offered only when it has somewhere to go. On an application that cannot be edited
+    /// every section but the Summary is unreachable, so the page is forced back to the Summary on
+    /// arrival: Back would land where it started and read as a button that does nothing.
+    /// </summary>
+    public bool ShowBack => CanEdit && ApplicationWizard.Previous(CurrentSection) is not null;
 
     public bool ShowContinue => CanEdit && CurrentSection != ApplicationSection.Summary;
 
@@ -228,6 +233,34 @@ public class ApplicationWizardViewModel
             ApplicationSection.ResidenceHistory => ApplicantInformationSaved,
             ApplicationSection.Summary => ApplicantInformationSaved && ResidenceHistorySaved,
             _ => false
+        };
+    }
+
+    /// <summary>
+    /// Why a step cannot be opened, or null when it can.
+    ///
+    /// The indicator looks like a row of tabs, so a step that silently ignores a click reads as
+    /// broken rather than as locked. The reason is shown on the step itself.
+    /// </summary>
+    public string? WhySectionIsLocked(ApplicationSection section)
+    {
+        if (IsSectionReachable(section))
+        {
+            return null;
+        }
+
+        if (!CanEdit)
+        {
+            return $"An application in {ApplicationListViewModel.DisplayNameFor(Status)} status cannot be changed.";
+        }
+
+        return section switch
+        {
+            ApplicationSection.ResidenceHistory => "Save applicant information first.",
+            ApplicationSection.Summary when !ApplicantInformationSaved =>
+                "Save applicant information first.",
+            ApplicationSection.Summary => "Save residence history first.",
+            _ => "Not available yet."
         };
     }
 
@@ -283,7 +316,7 @@ public class ApplicationWizardViewModel
 
         CanReview = isManager && ApplicationWorkflow.CanReview(application, userId).Succeeded;
         CanClaim = isManager && ApplicationWorkflow.CanClaim(application).Succeeded;
-        CanRelease = isManager && ApplicationWorkflow.CanRelease(application, userId).Succeeded;
+        CanRelease = isManager && ApplicationWorkflow.CanRelease(application).Succeeded;
     }
 
     /// <summary>Builds the page fresh from storage, for a GET or after a redirect.</summary>

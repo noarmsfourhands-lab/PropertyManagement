@@ -24,6 +24,13 @@
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <EnableNETAnalyzers>true</EnableNETAnalyzers>
     <AnalysisLevel>latest</AnalysisLevel>
+
+    <!--
+      NuGet's audit warnings are the exception. A CVE published against a transitive package would
+      otherwise fail the build on a commit that did not cause it and cannot fix it. They still
+      appear, loudly, as warnings.
+    -->
+    <WarningsNotAsErrors>$(WarningsNotAsErrors);NU1901;NU1902;NU1903;NU1904</WarningsNotAsErrors>
   </PropertyGroup>
 
 </Project>

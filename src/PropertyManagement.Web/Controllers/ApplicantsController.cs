@@ -1,5 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
-using PropertyManagement.Infrastructure.Services;
+using PropertyManagement.Application.Services;
 using PropertyManagement.Web.ViewModels.Applications;
 
 namespace PropertyManagement.Web.Controllers;
@@ -10,7 +10,7 @@ namespace PropertyManagement.Web.Controllers;
 /// </summary>
 public class ApplicantsController(
     IApplicationApplicantService applicants,
-    IRentalApplicationService applications) : ModalController
+    ApplicantListFactory factory) : ModalController
 {
     private const string ApplicantFormPartial = "_ApplicantForm";
     private const string ApplicantListView = "_ApplicantList";
@@ -19,19 +19,27 @@ public class ApplicantsController(
     [HttpGet]
     public async Task<IActionResult> ListPartial(int id, CancellationToken cancellationToken)
     {
-        var model = await BuildListAsync(id, cancellationToken);
+        var model = await factory.BuildAsync(id, User, cancellationToken);
 
-        return model is null ? Forbid() : PartialView(ApplicantListView, model);
+        // Null means this user may not view the application at all, which is answered the same way
+        // the application's own pages answer it: as though it does not exist.
+        return model is null ? NotFound() : PartialView(ApplicantListView, model);
     }
 
     [HttpGet]
     public async Task<IActionResult> Form(int id, CancellationToken cancellationToken)
     {
-        var model = await BuildListAsync(id, cancellationToken);
+        var model = await factory.BuildAsync(id, User, cancellationToken);
 
-        return model is null || !model.CanManage
-            ? Forbid()
-            : PartialView(ApplicantFormPartial, new AddApplicantViewModel { ApplicationId = id });
+        if (model is null)
+        {
+            return NotFound();
+        }
+
+        // May view but not change who is on it: 403 says so, and tells them nothing new.
+        return model.CanManage
+            ? PartialView(ApplicantFormPartial, new AddApplicantViewModel { ApplicationId = id })
+            : Forbid();
     }
 
     [HttpPost]
@@ -66,17 +74,28 @@ public class ApplicantsController(
     [HttpGet]
     public async Task<IActionResult> ConfirmRemove(int id, string userId, CancellationToken cancellationToken)
     {
-        var model = await BuildListAsync(id, cancellationToken);
-        var applicant = model?.Applicants.FirstOrDefault(entry => entry.UserId == userId);
+        var model = await factory.BuildAsync(id, User, cancellationToken);
 
-        return model is null || !model.CanManage || applicant is null
-            ? Forbid()
-            : PartialView("_ConfirmRemoveApplicant", new RemoveApplicantViewModel
+        if (model is null)
+        {
+            return NotFound();
+        }
+
+        var applicant = model.Applicants.FirstOrDefault(entry => entry.UserId == userId);
+
+        if (applicant is null)
+        {
+            return NotFound();
+        }
+
+        return model.CanManage
+            ? PartialView("_ConfirmRemoveApplicant", new RemoveApplicantViewModel
             {
                 ApplicationId = id,
                 UserId = userId,
                 Name = applicant.Name
-            });
+            })
+            : Forbid();
     }
 
     [HttpPost]
@@ -101,35 +120,5 @@ public class ApplicantsController(
             Url.Action(nameof(ListPartial), new { id = model.ApplicationId })!,
             "#applicant-list",
             $"{model.Name} removed from this application.");
-    }
-
-    /// <summary>
-    /// Builds the region's model, or null when this user has no business seeing the application
-    /// at all. Managers may look; only an applicant on it may change who else is on it.
-    /// </summary>
-    private async Task<ApplicantListViewModel?> BuildListAsync(int id, CancellationToken cancellationToken)
-    {
-        var application = await applications.GetAsync(id, cancellationToken);
-
-        if (application is null)
-        {
-            return null;
-        }
-
-        var userId = User.GetUserId();
-        var isApplicantOn = application.Applicants.Any(link => link.ApplicantUserId == userId);
-
-        if (!isApplicantOn && !User.IsPropertyManager())
-        {
-            return null;
-        }
-
-        return new ApplicantListViewModel
-        {
-            ApplicationId = id,
-            Applicants = await applicants.GetApplicantsAsync(id, cancellationToken),
-            CurrentUserId = userId,
-            CanManage = Domain.Rules.ApplicationWorkflow.CanEdit(application.Status, isApplicantOn)
-        };
     }
 }

@@ -22,8 +22,9 @@ public class LoginViewModel
 }
 
 /// <summary>
-/// Sign-up lets the user say which role they are, as the assessment asks. In a real system this
-/// would be an invitation or an administrator action rather than self-selection.
+/// Sign-up lets the user say which role they are. That is deliberate for a demonstration and
+/// wrong for a real system, where becoming a property manager should be an invitation or an
+/// administrator action rather than a radio button on a public form.
 /// </summary>
 public class RegisterViewModel
 {
@@ -64,6 +65,15 @@ public class RegisterViewModel
     public string Role { get; set; } = UserRole.Applicant;
 
     public string? ReturnUrl { get; set; }
+
+    /// <summary>
+    /// What makes an acceptable password, in one sentence, shown under the field.
+    ///
+    /// Identity reports one failed rule at a time and the field shows only the first, so someone
+    /// choosing a weak password is corrected once per rule across several attempts. Stating the
+    /// whole rule before they type is the fix; the same sentence is reused if they miss it anyway.
+    /// </summary>
+    public string PasswordRule { get; set; } = string.Empty;
 
     public static IReadOnlyList<(string Value, string Label)> RoleChoices =>
     [

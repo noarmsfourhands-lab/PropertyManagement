@@ -1,8 +1,8 @@
 namespace PropertyManagement.Domain.Entities;
 
 /// <summary>
-/// Bonus 3. Internal note on an application. Only ever loaded for property managers;
-/// no applicant-facing view model or endpoint projects this type.
+/// An internal note on an application, kept by and for property managers. Only ever loaded
+/// for them; no applicant-facing view model or endpoint projects this type.
 /// </summary>
 public class PropertyManagerNote
 {

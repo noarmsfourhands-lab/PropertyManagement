@@ -1,6 +1,7 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/PropertyManagement.Domain/PropertyManagement.Domain.csproj" />
+    <Project Path="src/PropertyManagement.Application/PropertyManagement.Application.csproj" />
     <Project Path="src/PropertyManagement.Infrastructure/PropertyManagement.Infrastructure.csproj" />
     <Project Path="src/PropertyManagement.Web/PropertyManagement.Web.csproj" />
   </Folder>

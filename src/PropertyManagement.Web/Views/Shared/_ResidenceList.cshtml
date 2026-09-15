@@ -46,11 +46,11 @@ else
                     {
                         <td class="text-end text-nowrap">
                             <button type="button" class="btn btn-sm btn-outline-secondary"
-                                    data-modal-url="@Url.Action("ResidenceForm", new { id = residence.Id, applicationId = Model.ApplicationId })">
+                                    data-modal-url="@Url.Action("Form", "Residences", new { id = residence.Id, applicationId = Model.ApplicationId })">
                                 Edit
                             </button>
                             <button type="button" class="btn btn-sm btn-outline-danger"
-                                    data-modal-url="@Url.Action("ConfirmDeleteResidence", new { id = residence.Id, applicationId = Model.ApplicationId })">
+                                    data-modal-url="@Url.Action("ConfirmDelete", "Residences", new { id = residence.Id, applicationId = Model.ApplicationId })">
                                 Remove
                             </button>
                         </td>

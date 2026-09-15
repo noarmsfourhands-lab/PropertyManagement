@@ -1,8 +1,8 @@
 namespace PropertyManagement.Domain.Entities;
 
 /// <summary>
-/// Bonus 5. Joins an application to each applicant who may view and edit it.
-/// Ownership checks run against this set rather than a single owner column.
+/// Joins an application to each applicant who may view and edit it. Ownership checks run
+/// against this set rather than a single owner column, so an application can be shared.
 /// </summary>
 public class RentalApplicationApplicant
 {

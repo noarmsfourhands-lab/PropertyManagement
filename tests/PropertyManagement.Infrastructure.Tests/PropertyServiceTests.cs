@@ -1,6 +1,8 @@
 using Microsoft.EntityFrameworkCore;
 using PropertyManagement.Domain.Entities;
+using PropertyManagement.Domain.Enums;
 using PropertyManagement.Domain.Rules;
+using PropertyManagement.Application.Services;
 using PropertyManagement.Infrastructure.Services;
 
 namespace PropertyManagement.Infrastructure.Tests;
@@ -12,6 +14,85 @@ public class PropertyServiceTests : IDisposable
     public void Dispose() => _database.Dispose();
 
     private static PropertyService ServiceOver(Persistence.PropertyManagementDbContext db) => new(db);
+
+    [Fact]
+    public async Task A_unit_reports_what_already_references_it()
+    {
+        await using var db = _database.CreateContext();
+        var property = await TestData.AddPropertyWithUnitsAsync(db);
+        var unitId = property.Units.First().Id;
+
+        // Three applications against the one unit, in three different states.
+        foreach (var status in new[]
+                 {
+                     ApplicationStatus.Submitted,
+                     ApplicationStatus.Submitted,
+                     ApplicationStatus.Denied
+                 })
+        {
+            db.RentalApplications.Add(new RentalApplication
+            {
+                UnitId = unitId,
+                Status = status,
+                CreatedAtUtc = TestData.Now,
+                PropertyName = property.Name,
+                UnitNumber = property.Units.First().UnitNumber,
+
+                // Complete, because Submitted and Denied are two of the statuses the database now
+                // refuses to hold without applicant details.
+                ApplicantInformation = new ApplicantInformation
+                {
+                    FirstName = "Robin",
+                    LastName = "Alvarez",
+                    Phone = "555-0100",
+                    Email = "robin@example.com",
+                    AddressLine1 = "4 Cedar Lane",
+                    City = "Portland",
+                    State = "OR",
+                    PostalCode = "97202"
+                }
+            });
+        }
+
+        await db.SaveChangesAsync();
+
+        var impact = await ServiceOver(db).GetUnitImpactAsync(unitId);
+
+        Assert.Equal(3, impact.Total);
+        Assert.Equal(2, impact.OpenCount);
+        Assert.Equal(1, impact.ClosedCount);
+        Assert.False(impact.HasLease);
+
+        // Ordered by how many, so the biggest group is read first.
+        Assert.Equal(ApplicationStatus.Submitted, impact.ByStatus[0].Status);
+        Assert.Equal(2, impact.ByStatus[0].Count);
+        Assert.Equal(ApplicationStatus.Denied, impact.ByStatus[1].Status);
+        Assert.Equal(1, impact.ByStatus[1].Count);
+    }
+
+    [Fact]
+    public async Task A_unit_nothing_references_reports_nothing()
+    {
+        await using var db = _database.CreateContext();
+        var property = await TestData.AddPropertyWithUnitsAsync(db);
+
+        var impact = await ServiceOver(db).GetUnitImpactAsync(property.Units.First().Id);
+
+        Assert.False(impact.Any);
+        Assert.Empty(impact.ByStatus);
+    }
+
+    [Fact]
+    public async Task A_unit_that_does_not_exist_yet_reports_nothing()
+    {
+        await using var db = _database.CreateContext();
+
+        // The add form asks for this with an id of zero, and must not be made to warn about a unit
+        // nobody has created.
+        var impact = await ServiceOver(db).GetUnitImpactAsync(0);
+
+        Assert.False(impact.Any);
+    }
 
     [Fact]
     public async Task A_property_is_created_and_then_edited_in_place()

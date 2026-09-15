@@ -1,31 +1,426 @@
-html {
-  font-size: 14px;
+/*
+ * Troy Web theme.
+ *
+ * This is a token layer over Bootstrap, not a fork of it. Bootstrap 5.3 exposes its own design
+ * decisions as --bs-* custom properties, so re-pointing those at the brand's palette re-themes
+ * every component that already uses them, and the handful of rules after the tokens cover only
+ * the shapes Bootstrap has no variable for. Upgrading Bootstrap therefore stays a version bump.
+ *
+ * The palette and type are read from troyweb.com rather than guessed: the warm off-white ground,
+ * the deep navy, the two oranges, the peach fills and the pill-shaped buttons are the values that
+ * site actually computes. General Sans comes from Fontshare, which publishes it, rather than from
+ * Troy Web's own server, which would be borrowing their bandwidth.
+ */
+
+/* The two font stylesheets are linked from the layout rather than imported here: an @import
+   inside a render-blocking sheet is invisible to the preload scanner, so it serialises into a
+   third round trip instead of starting alongside this file. */
+
+:root {
+  /* ---- brand palette, sampled from troyweb.com ---- */
+  --tw-ink: #37343E;
+  --tw-ink-soft: #5C5768;
+  --tw-navy: #0C202F;
+  --tw-navy-deep: #041523;
+  --tw-orange: #C03F18;
+  --tw-orange-bright: #FD6038;
+  --tw-peach: #FFEBE5;
+  --tw-peach-mid: #FFCEC2;
+  --tw-peach-faint: #FFEFEB;
+  --tw-ground: #FFFBFA;
+  --tw-surface: #FFFFFF;
+  --tw-line: #F0E4E0;
+  --tw-line-strong: #E3D2CC;
+
+  --tw-display: "General Sans", "Space Grotesk", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --tw-body: "General Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+
+  /* ---- Bootstrap's own variables, re-pointed at the palette ---- */
+  --bs-body-bg: var(--tw-ground);
+  --bs-body-color: var(--tw-ink);
+  --bs-secondary-color: var(--tw-ink-soft);
+  --bs-tertiary-bg: var(--tw-peach-faint);
+  --bs-border-color: var(--tw-line);
+  --bs-border-radius: .625rem;
+  --bs-border-radius-sm: .5rem;
+  --bs-border-radius-lg: 1rem;
+
+  /* Bootstrap reads the -rgb forms, not --bs-primary itself, and hover works by swapping
+     --bs-link-color-rgb for --bs-link-hover-color-rgb. Setting only the non-rgb names leaves
+     every link orange at rest and stock blue on hover. */
+  --bs-primary-rgb: 192, 63, 24;
+  --bs-dark-rgb: 12, 32, 47;
+  --bs-link-color: var(--tw-orange);
+  --bs-link-color-rgb: 192, 63, 24;
+  --bs-link-hover-color: var(--tw-orange-bright);
+  --bs-link-hover-color-rgb: 253, 96, 56;
+
+  --bs-body-font-family: var(--tw-body);
+  --bs-font-sans-serif: var(--tw-body);
+
+  --bs-focus-ring-color: rgba(192, 63, 24, .3);
 }
+
+html { font-size: 15px; }
 
 @media (min-width: 768px) {
-  html {
-    font-size: 16px;
-  }
-}
-
-.btn:focus, .btn:active:focus, .btn-link.nav-link:focus, .form-control:focus, .form-check-input:focus {
-  box-shadow: 0 0 0 0.1rem white, 0 0 0 0.25rem #258cfb;
-}
-
-html {
-  position: relative;
-  min-height: 100%;
+  html { font-size: 16px; }
 }
 
 body {
-  margin-bottom: 60px;
+  background: var(--tw-ground);
+  color: var(--tw-ink);
+  font-family: var(--tw-body);
+  -webkit-font-smoothing: antialiased;
+  padding-bottom: 3rem;
 }
 
-.form-floating > .form-control-plaintext::placeholder, .form-floating > .form-control::placeholder {
-  color: var(--bs-secondary-color);
-  text-align: end;
+/* ---------------------------------------------------------------- type */
+
+h1, h2, h3, h4, h5, h6, .navbar-brand {
+  font-family: var(--tw-display);
+  color: var(--tw-ink);
+  letter-spacing: -.015em;
+  text-wrap: balance;
 }
 
-.form-floating > .form-control-plaintext:focus::placeholder, .form-floating > .form-control:focus::placeholder {
-  text-align: start;
+h1 { font-weight: 600; }
+h2, h3 { font-weight: 600; }
+
+/* Space Grotesk is Troy Web's second face; it carries the small uppercase labels. */
+.tw-eyebrow,
+.card-header .fw-semibold,
+th[scope="col"],
+.table > thead th {
+  font-family: "Space Grotesk", var(--tw-display);
+  font-size: .74rem;
+  font-weight: 600;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--tw-ink-soft);
+}
+
+.card-header .fw-semibold { font-size: .8rem; }
+
+/* Digits that sit in columns should line up. */
+td, .badge, .display-6 { font-variant-numeric: tabular-nums; }
+
+/* ---------------------------------------------------------------- shell */
+
+.navbar {
+  background: transparent !important;
+  border: 0 !important;
+  padding-block: 1.1rem;
+}
+
+.navbar-brand {
+  font-weight: 700;
+  letter-spacing: -.02em;
+  color: var(--tw-navy);
+}
+
+.navbar-brand { white-space: nowrap; }
+
+/* The links sit in a soft peach pill that hugs them, as on troyweb.com. The account controls
+   are deliberately outside it, the way their call-to-action is. */
+.navbar .tw-navpill {
+  background: var(--tw-peach-faint);
+  border-radius: 200px;
+  padding: .3rem .45rem;
+  gap: .15rem;
+}
+
+.navbar .nav-link {
+  color: var(--tw-ink);
+  font-weight: 500;
+  border-radius: 200px;
+  padding-inline: .9rem;
+  white-space: nowrap;
+}
+
+.navbar .tw-account {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  white-space: nowrap;
+}
+
+.navbar .tw-who { font-size: .82rem; color: var(--tw-ink-soft); }
+
+.navbar .nav-link:hover,
+.navbar .nav-link:focus-visible { color: var(--tw-orange); }
+
+.navbar .tw-role {
+  font-family: "Space Grotesk", var(--tw-display);
+  font-size: .62rem;
+  font-weight: 600;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  background: var(--tw-peach-mid);
+  color: #8A3A12;
+  border-radius: 200px;
+  padding: .2em .6em;
+}
+
+/* Bootstrap scopes some of its variables to the component rather than to :root, with the
+   compiled Sass value as the default, so re-pointing --bs-primary alone leaves them untouched.
+   The wizard's step indicator was the one place that showed: its active pill stayed the stock
+   blue. These have to be set where Bootstrap reads them. */
+.nav-pills {
+  --bs-nav-pills-link-active-bg: var(--tw-navy);
+  --bs-nav-pills-link-active-color: #fff;
+  --bs-nav-pills-border-radius: 200px;
+}
+
+
+.nav-pills .nav-link { font-weight: 500; }
+.nav-pills .nav-link.border { border-color: var(--tw-line-strong) !important; }
+
+/* A step that is not open yet. Deliberately flat: no border, no fill, nothing that reads as a
+   control, so the row stops looking like three tabs of which two ignore you. */
+.nav-pills .tw-step-locked {
+  color: var(--tw-ink-soft);
+  opacity: .55;
+  cursor: not-allowed;
+  background: none;
+  border: 0;
+}
+
+/* ---------------------------------------------------------------- buttons */
+
+.btn {
+  --bs-btn-border-radius: 200px;
+  font-weight: 500;
+  padding-inline: 1.35rem;
+}
+
+.btn-sm { padding-inline: .95rem; }
+
+.btn-primary {
+  --bs-btn-bg: var(--tw-orange);
+  --bs-btn-border-color: var(--tw-orange);
+  --bs-btn-hover-bg: var(--tw-orange-bright);
+  --bs-btn-hover-border-color: var(--tw-orange-bright);
+  --bs-btn-active-bg: #A5340F;
+  --bs-btn-active-border-color: #A5340F;
+  --bs-btn-disabled-bg: var(--tw-peach-mid);
+  --bs-btn-disabled-border-color: var(--tw-peach-mid);
+  --bs-btn-disabled-color: var(--tw-orange);
+  --bs-btn-focus-shadow-rgb: 192, 63, 24;
+}
+
+.btn-outline-secondary {
+  --bs-btn-color: var(--tw-navy);
+  --bs-btn-border-color: var(--tw-line-strong);
+  --bs-btn-hover-bg: var(--tw-navy);
+  --bs-btn-hover-border-color: var(--tw-navy);
+  --bs-btn-hover-color: #fff;
+  --bs-btn-active-bg: var(--tw-navy-deep);
+  --bs-btn-active-border-color: var(--tw-navy-deep);
+  --bs-btn-focus-shadow-rgb: 12, 32, 47;
+}
+
+.btn-outline-primary {
+  --bs-btn-color: var(--tw-orange);
+  --bs-btn-border-color: var(--tw-orange);
+  --bs-btn-hover-bg: var(--tw-orange);
+  --bs-btn-hover-border-color: var(--tw-orange);
+  /* Pressed and disabled are separate literals in Bootstrap; without these the button flashes
+     stock blue the moment it is clicked. */
+  --bs-btn-active-bg: #A5340F;
+  --bs-btn-active-border-color: #A5340F;
+  --bs-btn-disabled-color: var(--tw-orange);
+  --bs-btn-focus-shadow-rgb: 192, 63, 24;
+}
+
+.btn-success {
+  --bs-btn-bg: var(--tw-navy);
+  --bs-btn-border-color: var(--tw-navy);
+  --bs-btn-hover-bg: var(--tw-navy-deep);
+  --bs-btn-hover-border-color: var(--tw-navy-deep);
+  --bs-btn-active-bg: var(--tw-navy-deep);
+  --bs-btn-active-border-color: var(--tw-navy-deep);
+  --bs-btn-disabled-bg: var(--tw-navy);
+  --bs-btn-disabled-border-color: var(--tw-navy);
+  --bs-btn-focus-shadow-rgb: 12, 32, 47;
+}
+
+.btn-link { text-decoration: none; }
+.btn-link:hover { text-decoration: underline; }
+
+/* ---------------------------------------------------------------- surfaces */
+
+.card {
+  --bs-card-border-color: var(--tw-line);
+  --bs-card-bg: var(--tw-surface);
+  --bs-card-border-radius: 1rem;
+  --bs-card-inner-border-radius: 1rem;
+  border-width: 1px;
+}
+
+.shadow-sm { box-shadow: 0 1px 2px rgba(12, 32, 47, .04), 0 8px 24px -12px rgba(12, 32, 47, .10) !important; }
+
+.card-header { background: var(--tw-surface) !important; border-bottom-color: var(--tw-line); padding-block: .9rem; }
+.card-footer { background: var(--tw-surface) !important; border-top-color: var(--tw-line); }
+
+.table { --bs-table-border-color: var(--tw-line); }
+.table > thead { --bs-table-bg: var(--tw-peach-faint); }
+.table-hover > tbody > tr:hover > * { --bs-table-bg-state: var(--tw-peach-faint); }
+
+.list-group { --bs-list-group-border-color: var(--tw-line); }
+
+.breadcrumb { --bs-breadcrumb-divider-color: var(--tw-line-strong); font-size: .85rem; }
+
+/* ---------------------------------------------------------------- forms */
+
+.form-control, .form-select {
+  border-color: var(--tw-line-strong);
+  border-radius: .55rem;
+  padding-block: .5rem;
+}
+
+.form-control:focus, .form-select:focus {
+  border-color: var(--tw-orange);
+  box-shadow: 0 0 0 .2rem rgba(192, 63, 24, .15);
+}
+
+/* ------------------------------------------------- password show/hide
+
+   The wrapper and the button are both created by password-reveal.js, so none of this applies to a
+   page whose scripts did not load: the field is left exactly as the markup declares it. */
+.pw-reveal {
+  position: relative;
+  display: block;
+}
+
+.pw-reveal .form-control {
+  /* Room for the button, so a long password never runs underneath it. */
+  padding-right: 2.9rem;
+}
+
+.pw-reveal-toggle {
+  position: absolute;
+  top: 0;
+  right: 0;
+  height: 100%;
+  width: 2.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--tw-ink-soft);
+  border-radius: 0 .55rem .55rem 0;
+  cursor: pointer;
+  transition: color .15s ease;
+}
+
+.pw-reveal-toggle:hover {
+  color: var(--tw-orange);
+}
+
+/* The global focus rule targets .btn, and this is deliberately not one: it is a control inside a
+   field rather than an action of its own, so it carries no button chrome until it is focused. */
+.pw-reveal-toggle:focus-visible {
+  outline: 2px solid var(--tw-orange);
+  outline-offset: -2px;
+  color: var(--tw-orange);
+  border-radius: .35rem;
+}
+
+.pw-reveal-toggle[aria-pressed="true"] {
+  color: var(--tw-orange);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pw-reveal-toggle { transition: none; }
+}
+
+.form-label { font-weight: 500; font-size: .88rem; color: var(--tw-ink); }
+.form-text { color: var(--tw-ink-soft); }
+
+.form-check-input:checked { background-color: var(--tw-orange); border-color: var(--tw-orange); }
+.form-check-input:focus { border-color: var(--tw-orange); box-shadow: 0 0 0 .2rem rgba(192, 63, 24, .15); }
+
+.text-danger { color: var(--tw-orange) !important; }
+
+/* Bootstrap zeroes the outline on controls and buttons at (0,2,0), so a bare :focus-visible
+   rule loses the cascade to it however late it is loaded. These match that specificity. */
+:focus-visible,
+.form-control:focus,
+.form-select:focus,
+.btn:focus-visible,
+.form-check-input:focus {
+  outline: 2px solid var(--tw-orange);
+  outline-offset: 2px;
+}
+
+/* ---------------------------------------------------------------- feedback */
+
+.alert { border-radius: .75rem; border-width: 1px; }
+
+.alert-success {
+  --bs-alert-bg: var(--tw-peach-faint);
+  --bs-alert-border-color: var(--tw-peach-mid);
+  --bs-alert-color: var(--tw-navy);
+}
+
+.alert-danger {
+  --bs-alert-bg: var(--tw-peach);
+  --bs-alert-border-color: var(--tw-peach-mid);
+  --bs-alert-color: var(--tw-orange);
+}
+
+.alert-warning {
+  --bs-alert-bg: var(--tw-peach-faint);
+  --bs-alert-border-color: var(--tw-peach-mid);
+  --bs-alert-color: var(--tw-navy);
+}
+
+.modal-content { border: 1px solid var(--tw-line); border-radius: 1rem; }
+.modal-header, .modal-footer { border-color: var(--tw-line); }
+
+.progress { --bs-progress-bg: var(--tw-peach); }
+.progress-bar { background-color: var(--tw-orange); }
+
+/* ---------------------------------------------------------------- status palette
+ *
+ * Application statuses get their own colours rather than borrowing Bootstrap's semantic set.
+ * Bootstrap's blues and yellows fight this palette, and more to the point a status is not a
+ * severity: "Submitted" is not information and "Returned" is not a warning. Owning the palette
+ * keeps the meaning in the application and the colours in the brand.
+ */
+
+.status {
+  font-family: "Space Grotesk", var(--tw-display);
+  font-weight: 600;
+  font-size: .68rem;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  border-radius: 200px;
+  padding: .3em .7em;
+}
+
+.status-draft     { background: #EFEDF1; color: var(--tw-ink-soft); }
+.status-submitted { background: var(--tw-navy); color: #fff; }
+.status-review    { background: var(--tw-peach-mid); color: #8A3A12; }
+.status-returned  { background: var(--tw-orange); color: #fff; }
+.status-approved  { background: #1F5D46; color: #fff; }
+.status-denied    { background: #7A1F16; color: #fff; }
+.status-withdrawn { background: #E4E0E6; color: #6B6577; }
+
+/* How long something has been waiting is a severity, unlike a status, so these two are allowed
+   to carry that meaning. They still come from the brand palette rather than Bootstrap's. */
+.status-fresh { background: var(--tw-peach-faint); color: var(--tw-ink-soft); }
+.status-aging { background: var(--tw-peach-mid); color: #8A3A12; }
+
+/* ---------------------------------------------------------------- misc */
+
+.text-muted { color: var(--tw-ink-soft) !important; }
+
+.bg-body-tertiary { background: var(--tw-ground) !important; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition-duration: .01ms !important; animation-duration: .01ms !important; }
 }

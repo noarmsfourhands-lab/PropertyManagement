@@ -1,4 +1,5 @@
 @model PropertyManagement.Web.ViewModels.Properties.UnitFormViewModel
+@using PropertyManagement.Web.ViewModels.Applications
 
 <form asp-action="SaveUnit" method="post"
       data-modal-form
@@ -15,6 +16,48 @@
 
     <div class="modal-body">
         <div asp-validation-summary="ModelOnly" class="text-danger small mb-3"></div>
+
+        @if (Model.NeedsAcknowledgement)
+        {
+            @* An application stores which unit it is for, not a copy of the unit. Everything it
+               shows about rent, type and bedrooms is read from the unit as it stands, so this edit
+               rewrites what all of these appear to say. *@
+            <div class="alert alert-warning py-2 small mb-3">
+                <p class="fw-semibold mb-2">
+                    @Model.Impact.Total application@(Model.Impact.Total == 1 ? "" : "s")
+                    already reference@(Model.Impact.Total == 1 ? "s" : "") this unit.
+                </p>
+
+                <ul class="list-unstyled mb-2">
+                    @foreach (var entry in Model.Impact.ByStatus)
+                    {
+                        <li class="d-flex align-items-center gap-2 mb-1">
+                            <span class="@ApplicationListViewModel.BadgeClassFor(entry.Status)">
+                                @ApplicationListViewModel.DisplayNameFor(entry.Status)
+                            </span>
+                            <span>@entry.Count</span>
+                        </li>
+                    }
+                </ul>
+
+                <p class="mb-0">
+                    Saving changes the rent, type and bedroom count that every one of them shows,
+                    @(Model.Impact.ClosedCount > 0
+                        ? "including the ones already decided."
+                        : "including any already submitted.")
+                    @if (Model.Impact.HasLease)
+                    {
+                        <text>The lease issued on this unit is not affected: it kept the rent it was issued at.</text>
+                    }
+                </p>
+            </div>
+
+            <div class="form-check mb-3">
+                <input asp-for="Acknowledged" class="form-check-input" />
+                <label asp-for="Acknowledged" class="form-check-label"></label>
+                <span asp-validation-for="Acknowledged" class="text-danger small d-block"></span>
+            </div>
+        }
 
         <div class="row">
             <div class="col-sm-6 mb-3">

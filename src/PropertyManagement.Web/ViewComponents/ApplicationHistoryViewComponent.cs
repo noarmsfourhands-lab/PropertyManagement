@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using PropertyManagement.Domain.Entities;
 using PropertyManagement.Domain.Enums;
-using PropertyManagement.Infrastructure.Services;
+using PropertyManagement.Application.Services;
 
 namespace PropertyManagement.Web.ViewComponents;
 
@@ -23,7 +23,7 @@ public class ApplicationHistoryViewComponent(IReviewService review) : ViewCompon
             return Content(string.Empty);
         }
 
-        var entries = await review.GetHistoryAsync(applicationId);
+        var entries = await review.GetHistoryAsync(applicationId, HttpContext.RequestAborted);
 
         return View(new ApplicationHistoryModel { Entries = entries });
     }

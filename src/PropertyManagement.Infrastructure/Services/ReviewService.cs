@@ -1,5 +1,6 @@
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
+using PropertyManagement.Application.Services;
 using PropertyManagement.Domain.Common;
 using PropertyManagement.Domain.Entities;
 using PropertyManagement.Domain.Enums;
@@ -7,26 +8,6 @@ using PropertyManagement.Domain.Rules;
 using PropertyManagement.Infrastructure.Persistence;
 
 namespace PropertyManagement.Infrastructure.Services;
-
-/// <summary>A completed review, as posted from the review modal.</summary>
-public record ReviewInput(int ApplicationId, ReviewOutcome Outcome, string? Comment);
-
-public interface IReviewService
-{
-    Task<IReadOnlyList<ApplicationEvent>> GetHistoryAsync(
-        int applicationId,
-        CancellationToken cancellationToken = default);
-
-    Task<DomainResult> ClaimAsync(int applicationId, Actor actor, CancellationToken cancellationToken = default);
-
-    Task<DomainResult> ReleaseAsync(int applicationId, Actor actor, CancellationToken cancellationToken = default);
-
-    Task<DomainResult> CompleteAsync(
-        ReviewInput input,
-        Actor actor,
-        DateOnly asOf,
-        CancellationToken cancellationToken = default);
-}
 
 /// <summary>
 /// What a property manager does to a submitted application. Approving issues the twelve-month
@@ -104,12 +85,16 @@ public class ReviewService(PropertyManagementDbContext db, TimeProvider timeProv
             return DomainResult.Failure("That application no longer exists.");
         }
 
-        var permitted = ApplicationWorkflow.CanRelease(application, actor.UserId);
+        var permitted = ApplicationWorkflow.CanRelease(application);
 
         if (permitted.Failed)
         {
             return permitted;
         }
+
+        // Recorded before the claim is cleared, and written into the entry, so the history shows
+        // when one manager took an application off another rather than putting down their own.
+        var takenFromSomeoneElse = ApplicationWorkflow.IsClaimedBySomeoneElse(application, actor.UserId);
 
         var now = timeProvider.GetUtcNow().UtcDateTime;
 
@@ -123,7 +108,9 @@ public class ReviewService(PropertyManagementDbContext db, TimeProvider timeProv
             ToStatus = ApplicationStatus.Submitted,
             ActorUserId = actor.UserId,
             ActorName = actor.Name,
-            Comment = "Released back to the review queue.",
+            Comment = takenFromSomeoneElse
+                ? "Released back to the review queue from another manager."
+                : "Released back to the review queue.",
             OccurredAtUtc = now
         });
 
@@ -153,6 +140,11 @@ public class ReviewService(PropertyManagementDbContext db, TimeProvider timeProv
         var application = await db.RentalApplications
             .Include(entity => entity.Unit)
                 .ThenInclude(unit => unit.Leases)
+            // The property comes too: a lease copies the property's name when it is issued, and
+            // without this it would be issued describing nothing.
+            .Include(entity => entity.Unit)
+                .ThenInclude(unit => unit.Property)
+            .AsSplitQuery()
             .FirstOrDefaultAsync(entity => entity.Id == input.ApplicationId, cancellationToken);
 
         if (application is null)
@@ -214,7 +206,7 @@ public class ReviewService(PropertyManagementDbContext db, TimeProvider timeProv
             await db.SaveChangesAsync(cancellationToken);
             return DomainResult.Success();
         }
-        catch (DbUpdateException exception) when (IsDuplicateLease(exception))
+        catch (DbUpdateException exception) when (DatabaseErrors.IsUniqueViolation(exception))
         {
             // Two approvals raced: both read the unit's leases before either wrote, so both got
             // past the availability check above. The unique index on the unit and the lease start
@@ -224,25 +216,4 @@ public class ReviewService(PropertyManagementDbContext db, TimeProvider timeProv
                 "This unit already has an active lease, so this application cannot be approved.");
         }
     }
-
-    /// <summary>SQL Server's codes for a violated unique index and a violated unique constraint.</summary>
-    private const int DuplicateKeyError = 2601;
-
-    private const int UniqueConstraintError = 2627;
-
-    /// <summary>
-    /// Whether the failure was another approval getting to this unit first.
-    ///
-    /// Matched on the error number rather than the message. SQL Server localises its messages, so
-    /// reading them would work on an English installation and quietly stop working on any other,
-    /// turning a handled race into an unhandled error. The message fallback covers providers that
-    /// report no number, which is what the test database does.
-    /// </summary>
-    private static bool IsDuplicateLease(DbUpdateException exception) => exception.InnerException switch
-    {
-        SqlException sql => sql.Number is DuplicateKeyError or UniqueConstraintError,
-        { } inner => inner.Message.Contains("Leases", StringComparison.OrdinalIgnoreCase)
-            && inner.Message.Contains("unique", StringComparison.OrdinalIgnoreCase),
-        _ => false
-    };
 }

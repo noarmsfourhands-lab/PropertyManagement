@@ -7,14 +7,25 @@ Why the code is shaped the way it is, and where each requirement is met.
 Four projects, with every dependency arrow pointing inward.
 
 ```
-Web  ──▶  Infrastructure  ──▶  Domain
- └──────────────────────────────▶
-Tests ────────────────────────▶ both
+Web  ──▶  Application  ──▶  Domain
+ └──▶  Infrastructure  ──────┘
+          (registration only)
 ```
 
 The domain project references no framework at all. That is not architecture for its own sake: it is
 what allows the business rules to be unit tested as plain function calls, with no database, no HTTP
 context and no test doubles.
+
+The application project holds the service contracts and the records they take and return, and
+references the domain and nothing else: no Entity Framework, no ASP.NET Core. That separation exists
+for one reason. A controller or a view model that names `IRentalApplicationService` should not
+thereby be naming the project that knows the data is in a relational database, because once it does,
+replacing that implementation stops being a change of one line and becomes a change everywhere the
+type appears.
+
+The web project does still reference infrastructure, in exactly one file: `Program.cs`, which
+registers the implementations against the contracts. That is what a composition root is for, and it
+is the only place in the web project where the word "Infrastructure" appears.
 
 ## Business rules live in one place
 
@@ -105,6 +116,24 @@ alone. A null target means the page reloads, which is what a status change actua
 A page opts an element in with `data-modal-url` and a form with `data-modal-form`. Nothing else
 needs to know the mechanism exists, which is what keeps it from becoming a front-end framework.
 
+### The wizard owns the page, not the rows inside it
+
+Residences are their own controller. The wizard owns the page and its sections; `ResidencesController`
+owns the rows in one of them, each reached by its own id and edited through the modal contract rather
+than the page's single form. Splitting them left the wizard controller at about 440 lines instead of
+650, and gave the residence routes names that say what they are: `/Residences/Form` rather than
+`/RentalApplications/ResidenceForm`.
+
+Both controllers have to answer the same two questions before doing anything, so they ask one shared
+`ApplicationContextFactory` rather than each keeping a copy of the rule. The order of those questions
+is the security-relevant part and is the same in both: whether the person may view it is settled
+first, so somebody who may not gets "not found" rather than a "forbidden" that confirms the id.
+
+That split is exactly the kind of change Razor fails silently: a partial that moved folders or a
+`Url.Action` missing its controller name still compiles and still renders, and only breaks when
+somebody clicks. `ResidenceRoutingTests` reads the links the wizard actually renders and then walks
+them, so that failure is a red test rather than a broken modal in a demo.
+
 ## Partial views and view components
 
 Both are required, and they are used for different jobs.
@@ -183,6 +212,84 @@ deciding it, leave them untouched, so those paths are last-write-wins. That is t
 each is already guarded by a status check that a second actor fails, but it is a narrower promise
 than "the row is protected", and worth saying so rather than implying otherwise.
 
+Residences are the case worth naming, because widening the promise there was tried and reverted.
+Making a residence row move `ResidenceHistoryVersion` sounds like closing a gap: the rows are part
+of the section, so changing one should invalidate a save built before it. In practice the residence
+modal is opened from the page that holds that token, so an applicant adding a residence invalidated
+their own page, and the very next Continue came back as "someone else saved this section" with
+nobody else involved. It also protected nothing: the section save writes a completion marker, and
+the rows are written one request at a time, each against current storage, so no row can be lost to
+a stale page. The token covers the section's own save. `Adding_a_residence_does_not_block_the_next_section_save`
+walks the sequence a person actually performs and is there to stop this being re-introduced.
+
+**A unit is referenced, not copied, so editing one is confirmed.** A rental application stores which
+unit it is for and nothing about that unit. Every screen showing an application reads the rent, type
+and bedroom count from the unit as it stands now, so editing a unit rewrites what every application
+against it appears to say, including ones already submitted, under review or decided. Deleting was
+already refused outright when applications or leases exist; editing was not, and had no reason to be
+refused, because changing a rent is a legitimate thing to do.
+
+The edit form therefore states what it will affect: how many applications reference the unit, broken
+down by status, and whether a lease exists. A manager ticks to say they have read it. The check runs
+on the server as well as in the page, because the warning and the checkbox are both rendered from
+that count, and a post that simply omitted them would otherwise be the one path with no warning at
+all. A lease is called out separately as unaffected: `Lease.MonthlyRent` is copied when the lease is
+issued, so it keeps the rent it was issued at.
+
+The alternative was to copy the unit's details onto the application at submission. That is the right
+answer for a system that has to reproduce exactly what someone applied for, and it is a larger change
+than this one: it adds columns that can drift from the unit, and a decision about which of the two a
+manager is looking at on every screen. The confirmation is the smaller, honest version.
+
+**Four rules the database keeps, not just the code.** Each of these was enforced somewhere in a
+service and nowhere else, which is fine until a second path appears that forgets.
+
+- **The two user ids that carry authority have real foreign keys.** Whether somebody may open an
+  application is decided by whether their id is in its applicant set, and whether they may review one
+  by whether they hold its claim. An id left pointing at a deleted account would leave an application
+  nobody could open, edit or repair, because the primary applicant cannot be removed either. Restrict
+  refuses the deletion instead. The audit columns beside them deliberately have no key: each stores a
+  name next to the id, so it keeps reading correctly after the account is gone.
+- **The audit trail and manager notes no longer cascade.** They are records *about* an application
+  rather than parts of one. Cascading meant a future delete would take the history with it for some
+  statuses and fail for others, because an approved application is already held back by its lease.
+  Restrict is one answer for every case.
+- **A submitted application carries its applicant's details, by check constraint.** The rule lived
+  only in the submit path, so anything that set a status another way could produce an approved
+  application with nobody's name on it. The constraint covers Submitted, Under review, Approved and
+  Denied: the four reached only by passing that rule and the four in which nothing can be edited.
+  Draft, Returned and Withdrawn are all legitimately incomplete.
+- **Records describe themselves.** An application copies the property name and unit number it was
+  started for, and a lease copies them when it is issued, the same way it already copied the rent.
+  Lists and past decisions read those rather than the unit, so renaming a property no longer rewrites
+  what every historical decision appears to say. The wizard still shows the unit's live rent and type,
+  because that is the unit somebody is applying for now, and a manager editing it is told what it
+  affects.
+
+**Claiming is required, and any manager can release a claim.** These two go together.
+
+Claiming used to be optional: a manager could complete a review straight from Submitted. That made
+the queue advisory rather than real. Two managers could open the same submitted application, both
+reach the outcome form, both type a comment, and the second to press the button would have their
+decision refused by the status check after the work was done. Requiring the claim makes the queue
+mean what it says: an application under review has exactly one manager, named on the record, and the
+refusal arrives before anyone types anything.
+
+That alone would have been worse than what it replaced, because claiming is only possible from
+Submitted. An application claimed by a manager who then leaves, is locked out, or is simply away
+would have been stuck for everyone, with no way back. So release is open to any manager. Reviewing
+still requires holding the claim, so taking over someone's work is two deliberate steps rather than
+one, and the audit entry distinguishes releasing your own claim from taking an application off a
+colleague.
+
+**Check-then-write races answer with a sentence.** Deleting a property or unit checks for
+applications and then saves; an application started in between still gets in, and the foreign key
+refuses the delete. Adding a unit number checks for a duplicate and then saves; a second manager
+adding the same number at the same moment is stopped by the unique index. The check produces the good
+message almost every time and the constraint is what actually guarantees the rule, so both catch the
+constraint and return what the check would have said. `DatabaseErrors` matches on the error number
+rather than the message, because SQL Server localises its messages.
+
 **Indexes follow the queries the requirements name.** The application list filters by status and by
 property, and the property is reached through the unit, so there are indexes on `Status` and on
 `(UnitId, Status)`, and the applicant join is indexed by user id. Availability is answered by "does
@@ -201,6 +308,30 @@ deliberate rather than an oversight: nothing in the application deletes an appli
 outlives everything that can actually happen to one. A system that did delete them would want the
 trail kept and the row soft-deleted instead.
 
+## Theming
+
+The look follows troyweb.com. The palette and the two typefaces were read off that site rather
+than guessed at: the warm off-white ground, the deep navy, the two oranges, the peach fills and
+the fully rounded buttons are the values it actually computes. General Sans is loaded from
+Fontshare, which publishes it, rather than from Troy Web's own server, which would be borrowing
+their bandwidth.
+
+It is a token layer over Bootstrap, not a fork. Bootstrap 5.3 exposes its design decisions as
+`--bs-*` custom properties, so re-pointing those at the palette re-themes every component that
+reads them, and upgrading Bootstrap stays a version bump rather than a merge.
+
+One caveat is worth knowing, because it is the thing that catches people out: Bootstrap scopes
+some of its variables to the component rather than to `:root`, with the compiled Sass value as the
+default. Re-pointing `--bs-primary` therefore does nothing for those. The step indicator on the
+application page was the one place it showed, its active pill staying the stock blue, and the fix
+is to set `--bs-nav-pills-link-active-bg` where Bootstrap reads it. Every page was then checked
+for any remaining stock blue, and there is none.
+
+Application statuses get their own palette rather than Bootstrap's semantic classes. A status is
+not a severity: Submitted is not information and Returned is not a warning, so borrowing those
+colours would say something the domain does not mean. Every foreground and background pair on the
+rendered pages was measured against WCAG AA and passes.
+
 ## Security posture
 
 Every controller is authenticated by default through a global `AuthorizeFilter`; a public page opts
@@ -218,6 +349,14 @@ Beyond that:
 - A residence is always looked up through its application, so guessing an id reaches nothing.
 - Manager-only notes are a separate entity that no applicant-facing view model or endpoint
   projects, so they cannot leak through a shared DTO.
+- An application someone may not view answers 404, not 403. A 403 confirms the id is real, which is
+  the entire thing somebody walking the numbers is trying to learn. Where the person may view it but
+  not perform the action, the answer is 403, because they already know it exists and "not found"
+  would only be confusing.
+- The grid renderer will not put a value from the endpoint into `href` unless it is a path on this
+  site, and draws only classes from this application's own status palette. Neither is a hole today,
+  because the endpoint is the one in this repository; both stop a response being able to restyle the
+  page or retarget a link if that ever stops being true.
 
 ## Seeding
 
@@ -231,13 +370,13 @@ the idempotency be tested against a schema created some other way.
 
 ## Testing
 
-Two suites, because they answer different questions.
+Three suites, because they answer different questions.
 
 | Suite | What it proves | Count |
 | --- | --- | --- |
-| `PropertyManagement.Domain.Tests` | The business rules are right, as plain function calls | 122 |
-| `PropertyManagement.Infrastructure.Tests` | The model, queries and services work against a real relational database | 79 |
-| `PropertyManagement.Web.Tests` | Section validation and what the wizard offers | 15 |
+| `PropertyManagement.Domain.Tests` | The business rules are right, as plain function calls | 123 |
+| `PropertyManagement.Infrastructure.Tests` | The model, queries and services work against a real relational database | 101 |
+| `PropertyManagement.Web.Tests` | Section validation, what the wizard offers, and what the pipeline returns | 45 |
 
 The integration suite runs on SQLite held in memory, which enforces keys, unique indexes and
 optimistic concurrency the way a server does while needing nothing installed. It is what proves the
@@ -253,14 +392,34 @@ migration drift would not surface there; and because every test context shares o
 read-then-write races are serialised and cannot be reproduced. Those are the first places to look
 if something ever behaves differently in production than in the suite.
 
+The web suite ends with twenty tests that boot the real application in process through
+`WebApplicationFactory`, sign in through the real login form with a real antiforgery token, and make
+real requests. They exist because a service refusing an operation and a route refusing it are
+different facts, and only the second one is what a browser meets. They are what pins the disclosure
+policy above: one applicant asking for another's application gets 404, an applicant asking for the
+review screen on their own application is sent to access-denied, and a post with no antiforgery
+token is rejected.
+
 ## The grid and its endpoint
 
 Bonus one asks for the list to be extracted into a reusable grid component driven by a documented
 JSON endpoint. `DataGridViewComponent` is that component, and it is reusable because it is
 ignorant: a column names a property on the returned row, and anything needing a decision, such as a
-status label or the colour of its badge, is decided by the endpoint and arrives as a field. Nothing
-in `data-grid.js` mentions applications, and every value is written with `textContent`, so a field
-from the endpoint is never treated as markup.
+status label or the colour of its badge, is decided by the endpoint and arrives as a field. Every
+value is written with `textContent`, so a field from the endpoint is never treated as markup.
+
+One piece of application knowledge does sit in `data-grid.js`, and it is there deliberately: the
+list of status chip classes a badge column is allowed to draw. A class attribute taken verbatim from
+a response lets whoever controls that response restyle the page, and the script has no way to know
+the response was not tampered with, so it draws only classes this application defines and falls back
+to the neutral chip for anything else. A second list using badge columns would need its own classes
+added there. The honest trade is a small, named leak of domain knowledge in exchange for a shared
+script that cannot be used to inject styling; the alternative, passing an allowlist in through the
+column definition, moves the leak rather than removing it.
+
+The component has one consumer today, the applications list. That is the only list in the app with
+paging, sorting and filtering to extract; the property and unit tables are short, unfiltered and
+hand-rolled, and wrapping them in a grid would add indirection without removing any code.
 
 Sorting goes through an enum rather than a column name taken from the request. A request cannot
 therefore order by a column that was never meant to be exposed, and there is no path from the query
@@ -323,7 +482,7 @@ action for giving the whole thing up.
 | Migrations applied and database created on start | `Program.cs` start-up scope | Done |
 | Idempotent seeding with Bogus, every status | `DatabaseSeeder` | Done |
 | ASP.NET Identity for users and roles | `DependencyInjection.AddInfrastructure` | Done |
-| Unit tests for business logic | 216 tests across three suites | Done |
+| Unit tests for business logic | 269 tests across three suites | Done |
 | Sign up, log in, log out with role choice | `AccountController` | Done |
 | Properties and units maintained through modals | `PropertiesController` | Done |
 | Partial views and view components | Section and modal partials; two view components | Done |
@@ -333,7 +492,7 @@ action for giving the whole thing up.
 | Single page, one section at a time, one form, one action | `RentalApplicationsController.Section` | Done |
 | Continue validates and saves; Back does not | Same action, `WizardCommand` | Done |
 | Sections render editable or read-only server-side | `SectionIsEditable` | Done |
-| Residences added, edited, removed through a modal | `ResidenceForm`, `SaveResidence`, `DeleteResidence` | Done |
+| Residences added, edited, removed through a modal | `ResidencesController` | Done |
 | Submit blocked until both sections saved | `ApplicationWorkflow.CanSubmit` | Done |
 | Active lease blocks submit and approval | `LeaseTerm`, `Leases` unique index | Done |
 | Withdraw, and correct and resubmit a returned application | `WithdrawAsync`, `SubmitAsync` | Done |
@@ -350,7 +509,7 @@ All five are implemented.
 | Bonus | Where |
 | --- | --- |
 | 1. Paging and sorting in the database, a reusable grid over a documented JSON endpoint | `DataGridViewComponent`, `ApplicationsApiController`, `/openapi/v1.json` |
-| 2. Review queue with claim and release | `ReviewService.ClaimAsync` and `ReleaseAsync` |
+| 2. Review queue with claim and release, claiming required before a decision | `ReviewService.ClaimAsync` and `ReleaseAsync`, `ApplicationWorkflow.CanReview` |
 | 3. Manager-only notes | `NoteService`, `ApplicationNotesViewComponent` |
 | 4. Save a section that fails validation, Summary lists what blocks submission | `WizardCommand.SaveDraft`, `SectionValidation` |
 | 5. More than one applicant, stale saves rejected | `ApplicationApplicantService`, per-section concurrency tokens |

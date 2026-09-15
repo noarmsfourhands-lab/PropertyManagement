@@ -1,6 +1,7 @@
+using System.Globalization;
 using Microsoft.AspNetCore.Mvc;
 using PropertyManagement.Domain.Enums;
-using PropertyManagement.Infrastructure.Services;
+using PropertyManagement.Application.Services;
 using PropertyManagement.Web.ViewModels.Applications;
 
 namespace PropertyManagement.Web.Controllers.Api;
@@ -18,8 +19,12 @@ namespace PropertyManagement.Web.Controllers.Api;
 /// <param name="ApplicantName">The name given on the application, empty until it has been filled in.</param>
 /// <param name="Status">The status as a stable name, for callers that need the value rather than the label.</param>
 /// <param name="StatusLabel">The status as it should be shown to a person.</param>
-/// <param name="StatusClass">The Bootstrap contextual class the badge is drawn with.</param>
-/// <param name="Submitted">When the application was submitted, or a note that it has not been.</param>
+/// <param name="StatusClass">The class the chip is drawn with, from this application's own status palette.</param>
+/// <param name="Submitted">
+/// When the application was submitted, as an ISO-8601 instant, or empty when it has not been.
+/// Deliberately not formatted here: the server knows neither the reader's timezone nor their
+/// locale, so formatting it would give everyone the server's.
+/// </param>
 /// <param name="DetailUrl">Where to open the application.</param>
 public record ApplicationRowDto(
     int Id,
@@ -96,7 +101,9 @@ public class ApplicationsApiController(IRentalApplicationService applications) :
                 row.Status.ToString(),
                 ApplicationListViewModel.DisplayNameFor(row.Status),
                 ApplicationListViewModel.BadgeClassFor(row.Status),
-                row.SubmittedAtUtc?.ToLocalTime().ToString("d MMM yyyy") ?? "Not submitted",
+                row.SubmittedAtUtc is { } submitted
+                    ? DateTime.SpecifyKind(submitted, DateTimeKind.Utc).ToString("O", CultureInfo.InvariantCulture)
+                    : string.Empty,
                 Url.Action("Edit", "RentalApplications", new { id = row.Id }) ?? string.Empty))
             .ToList();
 

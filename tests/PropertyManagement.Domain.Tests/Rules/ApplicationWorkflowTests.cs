@@ -189,28 +189,55 @@ public class ApplicationWorkflowTests
     }
 
     [Fact]
-    public void Only_the_holding_manager_can_release_a_claimed_application()
+    public void Any_manager_can_release_a_claimed_application()
     {
         var claimed = ApplicationIn(ApplicationStatus.UnderReview, claimedBy: Manager);
 
-        Assert.True(ApplicationWorkflow.CanRelease(claimed, Manager).Succeeded);
+        Assert.True(ApplicationWorkflow.CanRelease(claimed).Succeeded);
 
-        var byOther = ApplicationWorkflow.CanRelease(claimed, OtherManager);
-        Assert.True(byOther.Failed);
-        Assert.Equal("This application is claimed by another property manager.", byOther.Error);
+        // Deliberately open to anyone. Claiming only works from Submitted, so restricting release
+        // to the holder left an application stuck for every other manager the moment that one
+        // account became unavailable, with no way back.
+        Assert.True(ApplicationWorkflow.CanRelease(claimed).Succeeded);
+        Assert.True(ApplicationWorkflow.IsClaimedBySomeoneElse(claimed, OtherManager));
+        Assert.False(ApplicationWorkflow.IsClaimedBySomeoneElse(claimed, Manager));
     }
 
     [Fact]
-    public void An_unclaimed_application_cannot_be_released()
+    public void Releasing_still_requires_the_application_to_be_under_review()
     {
-        Assert.True(ApplicationWorkflow.CanRelease(ApplicationIn(ApplicationStatus.Submitted), Manager).Failed);
+        Assert.True(ApplicationWorkflow.CanRelease(ApplicationIn(ApplicationStatus.Submitted)).Failed);
     }
 
     [Fact]
-    public void Any_manager_can_review_an_unclaimed_submitted_application()
+    public void Reviewing_is_still_restricted_to_the_manager_holding_the_claim()
     {
-        Assert.True(ApplicationWorkflow.CanReview(ApplicationIn(ApplicationStatus.Submitted), Manager).Succeeded);
-        Assert.True(ApplicationWorkflow.CanReview(ApplicationIn(ApplicationStatus.Submitted), OtherManager).Succeeded);
+        var claimed = ApplicationIn(ApplicationStatus.UnderReview, claimedBy: Manager);
+
+        // Opening release did not open reviewing. Taking over somebody else's work stays two
+        // deliberate steps: release it, then claim it.
+        Assert.True(ApplicationWorkflow.CanReview(claimed, Manager).Succeeded);
+        Assert.True(ApplicationWorkflow.CanReview(claimed, OtherManager).Failed);
+    }
+
+    [Fact]
+    public void An_unclaimed_submitted_application_must_be_claimed_before_it_is_reviewed()
+    {
+        var submitted = ApplicationIn(ApplicationStatus.Submitted);
+
+        // Claiming is the only way in. It used to be optional, which made the queue advisory: two
+        // managers could both open the outcome form on the same application, and the second to
+        // press the button had their decision refused after they had already written a comment.
+        foreach (var manager in new[] { Manager, OtherManager })
+        {
+            var refused = ApplicationWorkflow.CanReview(submitted, manager);
+
+            Assert.True(refused.Failed);
+            Assert.Equal("Claim this application before reviewing it.", refused.Error);
+        }
+
+        // And claiming it is exactly what opens the door.
+        Assert.True(ApplicationWorkflow.CanClaim(submitted).Succeeded);
     }
 
     [Fact]

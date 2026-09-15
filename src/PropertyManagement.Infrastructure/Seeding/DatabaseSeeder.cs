@@ -125,13 +125,33 @@ public class DatabaseSeeder(
                 throw new InvalidOperationException($"Could not create the seeded user {email}: {errors}");
             }
 
-            await userManager.AddToRoleAsync(user, role);
+            var assigned = await userManager.AddToRoleAsync(user, role);
+
+            if (!assigned.Succeeded)
+            {
+                var roleErrors = string.Join("; ", assigned.Errors.Select(error => error.Description));
+                throw new InvalidOperationException($"Could not put {email} in the {role} role: {roleErrors}");
+            }
+
             users.Add(user);
             logger.LogInformation("Created {Role} {Email}.", role, email);
         }
 
         return users;
     }
+
+    /// <summary>
+    /// How many bedrooms a type implies. A loft is one open room, so it counts as a studio does.
+    /// </summary>
+    private static int BedroomsFor(string unitTypeName) => unitTypeName switch
+    {
+        "Studio" => 0,
+        "Loft" => 0,
+        "One Bedroom" => 1,
+        "Two Bedroom" => 2,
+        "Three Bedroom" => 3,
+        _ => 1
+    };
 
     private async Task SeedUnitTypesAsync(CancellationToken cancellationToken)
     {
@@ -162,23 +182,34 @@ public class DatabaseSeeder(
         }
 
         // Only active types are assigned, matching the rule the UI enforces for new units.
-        var selectableTypeIds = await db.UnitTypes
+        var selectableTypes = await db.UnitTypes
             .Where(unitType => unitType.IsActive)
-            .Select(unitType => unitType.Id)
+            .Select(unitType => new { unitType.Id, unitType.Name })
             .ToListAsync(cancellationToken);
 
-        if (selectableTypeIds.Count == 0)
+        if (selectableTypes.Count == 0)
         {
             throw new InvalidOperationException("Unit types must be seeded before properties.");
         }
 
         var unitNumber = 0;
 
+        // The type is picked first and the bedroom count follows from it. Drawing the two
+        // independently produced units labelled "Two Bedroom" with nought bedrooms, which reads as
+        // a bug on every screen that shows both and undermines the rest of the demo data.
         var unitFaker = new Faker<Unit>()
+            .CustomInstantiator(faker =>
+            {
+                var type = faker.PickRandom(selectableTypes);
+
+                return new Unit
+                {
+                    UnitTypeId = type.Id,
+                    Bedrooms = BedroomsFor(type.Name)
+                };
+            })
             .RuleFor(unit => unit.UnitNumber, faker => $"{faker.Random.Int(1, 4)}{++unitNumber:D2}")
-            .RuleFor(unit => unit.Bedrooms, faker => faker.Random.Int(0, 3))
-            .RuleFor(unit => unit.MonthlyRent, faker => Math.Round(faker.Random.Decimal(950, 4200), 2))
-            .RuleFor(unit => unit.UnitTypeId, faker => faker.PickRandom(selectableTypeIds));
+            .RuleFor(unit => unit.MonthlyRent, faker => Math.Round(faker.Random.Decimal(950, 4200), 2));
 
         var propertyFaker = new Faker<Property>()
             .RuleFor(property => property.Name, faker => $"{faker.Address.StreetName()} {faker.PickRandom("Court", "Residences", "Commons", "Place")}")
@@ -228,7 +259,10 @@ public class DatabaseSeeder(
         var statuses = Enum.GetValues<ApplicationStatus>();
         var required = statuses.Length * _options.ApplicationsPerStatus;
 
+        // The property comes with them: an application and a lease each record the names they were
+        // created under, and those have to be read from somewhere to be recorded.
         var units = await db.Units
+            .Include(unit => unit.Property)
             .OrderBy(unit => unit.Id)
             .Take(required)
             .ToListAsync(cancellationToken);
@@ -265,7 +299,9 @@ public class DatabaseSeeder(
                         UnitId = unit.Id,
                         StartDate = start,
                         EndDate = LeaseTerm.EndDateFor(start),
-                        MonthlyRent = unit.MonthlyRent
+                        MonthlyRent = unit.MonthlyRent,
+                        PropertyName = unit.Property?.Name ?? string.Empty,
+                        UnitNumber = unit.UnitNumber
                     };
                 }
 
@@ -294,6 +330,10 @@ public class DatabaseSeeder(
             UnitId = unit.Id,
             Status = status,
             CreatedAtUtc = createdAt,
+
+            // Recorded on the application the same way the real path records it.
+            PropertyName = unit.Property?.Name ?? string.Empty,
+            UnitNumber = unit.UnitNumber,
             ApplicantInformation = new ApplicantInformation
             {
                 FirstName = applicant.FirstName,

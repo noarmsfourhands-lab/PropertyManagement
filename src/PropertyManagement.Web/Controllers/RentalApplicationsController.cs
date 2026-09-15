@@ -3,13 +3,14 @@ using Microsoft.AspNetCore.Mvc;
 using PropertyManagement.Domain.Entities;
 using PropertyManagement.Domain.Enums;
 using PropertyManagement.Domain.Rules;
-using PropertyManagement.Infrastructure.Services;
+using PropertyManagement.Application.Services;
 using PropertyManagement.Web.ViewModels.Applications;
 
 namespace PropertyManagement.Web.Controllers;
 
 /// <summary>
-/// The rental application: the list, the single-page wizard, the residence modal, and withdrawal.
+/// The rental application: the list, the single-page wizard, and withdrawal. The residences inside
+/// the second section are their own resource and have their own controller.
 ///
 /// The wizard is one page showing one section at a time. One view model drives it and one action
 /// receives every post; the button that was pressed decides what happens. Only the section on
@@ -18,11 +19,9 @@ namespace PropertyManagement.Web.Controllers;
 /// </summary>
 public class RentalApplicationsController(
     IRentalApplicationService applications,
+    ApplicationContextFactory contexts,
     TimeProvider timeProvider) : ModalController
 {
-    private const string ResidenceFormPartial = "_ResidenceForm";
-    private const string ResidenceListView = "_ResidenceList";
-
     private DateOnly Today => DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime);
 
     // ---------------------------------------------------------------- List
@@ -80,7 +79,7 @@ public class RentalApplicationsController(
         ApplicationSection? section,
         CancellationToken cancellationToken = default)
     {
-        var context = await LoadAsync(id, cancellationToken);
+        var context = await contexts.LoadAsync(id, User, cancellationToken);
 
         if (context is null)
         {
@@ -89,7 +88,7 @@ public class RentalApplicationsController(
 
         if (!context.CanView)
         {
-            return Forbid();
+            return Hidden();
         }
 
         var model = BuildModel(context, ApplicationSection.Summary);
@@ -122,7 +121,7 @@ public class RentalApplicationsController(
     {
         ArgumentNullException.ThrowIfNull(model);
 
-        var context = await LoadAsync(model.ApplicationId, cancellationToken);
+        var context = await contexts.LoadAsync(model.ApplicationId, User, cancellationToken);
 
         if (context is null)
         {
@@ -131,7 +130,7 @@ public class RentalApplicationsController(
 
         if (!context.CanView)
         {
-            return Forbid();
+            return Hidden();
         }
 
         // Back never saves and never validates, so a redirect simply discards what was posted.
@@ -203,7 +202,7 @@ public class RentalApplicationsController(
             // show. This matters most for a stale save: the page comes back with what is actually
             // stored, and with a token matching it, rather than the user's copy and a fresh token
             // that would let a second Continue overwrite the other person's work after all.
-            var reloaded = await LoadAsync(model.ApplicationId, cancellationToken) ?? context;
+            var reloaded = await contexts.LoadAsync(model.ApplicationId, User, cancellationToken) ?? context;
 
             // Model state still holds the posted values, and the tag helpers prefer those over
             // the model, so it is cleared before the message is put back.
@@ -244,7 +243,7 @@ public class RentalApplicationsController(
             _ => Domain.Common.DomainResult.Success()
         };
 
-        var reloaded = await LoadAsync(model.ApplicationId, cancellationToken) ?? context;
+        var reloaded = await contexts.LoadAsync(model.ApplicationId, User, cancellationToken) ?? context;
 
         if (saved.Failed)
         {
@@ -297,7 +296,7 @@ public class RentalApplicationsController(
 
         if (outstanding.Count > 0)
         {
-            var reloaded = await LoadAsync(model.ApplicationId, cancellationToken) ?? context;
+            var reloaded = await contexts.LoadAsync(model.ApplicationId, User, cancellationToken) ?? context;
 
             ModelState.Clear();
             AddError(null, "This application still has errors and cannot be submitted.");
@@ -314,7 +313,7 @@ public class RentalApplicationsController(
 
         if (result.Failed)
         {
-            var reloaded = await LoadAsync(model.ApplicationId, cancellationToken) ?? context;
+            var reloaded = await contexts.LoadAsync(model.ApplicationId, User, cancellationToken) ?? context;
 
             ModelState.Clear();
             AddError(null, result.Error!);
@@ -331,11 +330,16 @@ public class RentalApplicationsController(
     [HttpGet]
     public async Task<IActionResult> ConfirmWithdraw(int id, CancellationToken cancellationToken)
     {
-        var context = await LoadAsync(id, cancellationToken);
+        var context = await contexts.LoadAsync(id, User, cancellationToken);
 
         if (context is null)
         {
             return NotFound();
+        }
+
+        if (!context.CanView)
+        {
+            return Hidden();
         }
 
         if (!context.IsApplicantOn)
@@ -352,11 +356,11 @@ public class RentalApplicationsController(
     {
         // Checked before the service is called, not only after it refuses. The rejection is
         // rendered from the application itself, so reaching that path at all has to be earned.
-        var context = await LoadAsync(id, cancellationToken);
+        var context = await contexts.LoadAsync(id, User, cancellationToken);
 
         if (context is null || !context.IsApplicantOn)
         {
-            return NotFoundOrForbid(context is not null);
+            return Hidden();
         }
 
         var result = await applications.WithdrawAsync(id, User.ToActor(), cancellationToken);
@@ -372,158 +376,6 @@ public class RentalApplicationsController(
         TempData["StatusMessage"] = "Application withdrawn.";
 
         return ModalSucceeded(Url.Action(nameof(Edit), new { id })!, target: null);
-    }
-
-    // ---------------------------------------------------------------- Residence modal
-
-    [HttpGet]
-    public async Task<IActionResult> ResidenceForm(
-        int id,
-        int applicationId,
-        CancellationToken cancellationToken)
-    {
-        var context = await LoadAsync(applicationId, cancellationToken);
-
-        if (context is null)
-        {
-            return NotFound();
-        }
-
-        if (!context.CanEdit)
-        {
-            return Forbid();
-        }
-
-        if (id == 0)
-        {
-            return PartialView(ResidenceFormPartial, new ResidenceFormViewModel { ApplicationId = applicationId });
-        }
-
-        // Found through the application, so a residence belonging to someone else is not reachable.
-        var residence = context.Application.Residences.FirstOrDefault(entity => entity.Id == id);
-
-        return residence is null
-            ? NotFound()
-            : PartialView(ResidenceFormPartial, ResidenceFormViewModel.From(residence));
-    }
-
-    [HttpPost]
-    [ValidateAntiForgeryToken]
-    public async Task<IActionResult> SaveResidence(ResidenceFormViewModel model, CancellationToken cancellationToken)
-    {
-        ArgumentNullException.ThrowIfNull(model);
-
-        if (!ModelState.IsValid)
-        {
-            return ModalValidationFailed(ResidenceFormPartial, model);
-        }
-
-        var result = await applications.SaveResidenceAsync(
-            model.ToInput(),
-            User.GetUserId(),
-            Today,
-            cancellationToken);
-
-        if (result.Failed)
-        {
-            // Date rules belong on the date fields; anything else is about the record as a whole.
-            AddError(DateFieldFor(result.Error!), result.Error!);
-            return ModalValidationFailed(ResidenceFormPartial, model);
-        }
-
-        return ModalSucceeded(
-            Url.Action(nameof(ResidenceListPartial), new { id = model.ApplicationId })!,
-            "#residence-list",
-            model.IsNew ? "Residence added." : "Residence saved.");
-    }
-
-    [HttpGet]
-    public async Task<IActionResult> ConfirmDeleteResidence(
-        int id,
-        int applicationId,
-        CancellationToken cancellationToken)
-    {
-        var context = await LoadAsync(applicationId, cancellationToken);
-
-        if (context is null)
-        {
-            return NotFound();
-        }
-
-        if (!context.CanEdit)
-        {
-            return Forbid();
-        }
-
-        var residence = context.Application.Residences.FirstOrDefault(entity => entity.Id == id);
-
-        return residence is null
-            ? NotFound()
-            : PartialView("_ConfirmDeleteResidence", residence);
-    }
-
-    [HttpPost]
-    [ValidateAntiForgeryToken]
-    public async Task<IActionResult> DeleteResidence(
-        int id,
-        int applicationId,
-        CancellationToken cancellationToken)
-    {
-        // Guarded before the service call, matching the GET twin. Without this a signed-in
-        // applicant could post another applicant's residence id and read their address back out
-        // of the rejection that the service correctly produced.
-        var context = await LoadAsync(applicationId, cancellationToken);
-
-        if (context is null || !context.CanEdit)
-        {
-            return NotFoundOrForbid(context is not null);
-        }
-
-        var residence = context.Application.Residences.FirstOrDefault(entity => entity.Id == id);
-
-        if (residence is null)
-        {
-            return NotFound();
-        }
-
-        var result = await applications.DeleteResidenceAsync(id, User.GetUserId(), cancellationToken);
-
-        if (result.Failed)
-        {
-            AddError(null, result.Error!);
-            return ModalValidationFailed("_ConfirmDeleteResidence", residence);
-        }
-
-        return ModalSucceeded(
-            Url.Action(nameof(ResidenceListPartial), new { id = applicationId })!,
-            "#residence-list",
-            "Residence removed.");
-    }
-
-    /// <summary>The residence list on its own, re-fetched after the modal saves.</summary>
-    [HttpGet]
-    public async Task<IActionResult> ResidenceListPartial(int id, CancellationToken cancellationToken)
-    {
-        var context = await LoadAsync(id, cancellationToken);
-
-        if (context is null)
-        {
-            return NotFound();
-        }
-
-        if (!context.CanView)
-        {
-            return Forbid();
-        }
-
-        var model = new ResidenceListViewModel
-        {
-            ApplicationId = id,
-            Residences = ResidenceRules.InReviewOrder(context.Application.Residences),
-            Editable = context.CanEdit
-        };
-
-        return PartialView(ResidenceListView, model);
     }
 
     // ---------------------------------------------------------------- Helpers
@@ -567,15 +419,6 @@ public class RentalApplicationsController(
         }
     }
 
-    private static string? DateFieldFor(string error) => error switch
-    {
-        _ when error.Contains("Move-out", StringComparison.Ordinal) =>
-            nameof(ResidenceFormViewModel.MoveOutDate),
-        _ when error.Contains("Move-in", StringComparison.Ordinal) =>
-            nameof(ResidenceFormViewModel.MoveInDate),
-        _ => null
-    };
-
     private ApplicationWizardViewModel BuildModel(ApplicationContext context, ApplicationSection section) =>
         ApplicationWizardViewModel.FromStorage(
             context.Application,
@@ -590,45 +433,5 @@ public class RentalApplicationsController(
     {
         model.Rehydrate(context.Application, context.IsApplicantOn, context.IsManager, context.UserId);
         return model;
-    }
-
-    /// <summary>
-    /// How to answer a request for something the caller may not have. Both cases return the same
-    /// status, so walking ids tells an outsider nothing about which applications exist.
-    /// </summary>
-    private IActionResult NotFoundOrForbid(bool exists) => exists ? Forbid() : NotFound();
-
-    private async Task<ApplicationContext?> LoadAsync(int id, CancellationToken cancellationToken)
-    {
-        var application = await applications.GetAsync(id, cancellationToken);
-
-        if (application is null)
-        {
-            return null;
-        }
-
-        var userId = User.GetUserId();
-
-        return new ApplicationContext(
-            application,
-            userId,
-            application.Applicants.Any(link => link.ApplicantUserId == userId),
-            User.IsPropertyManager());
-    }
-
-    /// <summary>
-    /// One load of the application together with the permission answers every action needs, so no
-    /// action has to re-derive them and none of them can disagree.
-    /// </summary>
-    private sealed record ApplicationContext(
-        RentalApplication Application,
-        string UserId,
-        bool IsApplicantOn,
-        bool IsManager)
-    {
-        /// <summary>A manager may read any application; an applicant only one they are on.</summary>
-        public bool CanView => IsApplicantOn || IsManager;
-
-        public bool CanEdit => ApplicationWorkflow.CanEdit(Application.Status, IsApplicantOn);
     }
 }

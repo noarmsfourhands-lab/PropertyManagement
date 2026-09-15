@@ -1,0 +1,46 @@
+name: build
+
+# Every push and every pull request, so a change that breaks the build or a test is caught
+# where it happened rather than by the next person to clone the repository.
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Restore
+        run: dotnet restore
+
+      # Warnings already fail the build through Directory.Build.props, so this needs no extra flag.
+      - name: Build
+        run: dotnet build --no-restore --configuration Release
+
+      # The C# compiler never looks at wwwroot, so a typo in a script is invisible to every step
+      # above and to every test below: the page still serves, the script simply never runs and the
+      # feature it drives silently does nothing. One parse per file catches that for almost no time.
+      - name: Check the scripts parse
+        run: |
+          for file in src/PropertyManagement.Web/wwwroot/js/*.js; do
+            echo "checking $file"
+            node --check "$file"
+          done
+
+      # The suites run on SQLite held in memory, so the workflow needs no database service.
+      - name: Test
+        run: dotnet test --no-build --configuration Release --verbosity normal
+
+      # Builds the image without running it. The README opens by telling a reviewer to use Docker,
+      # so a Dockerfile that cannot build is a broken front door; nothing else here would catch it.
+      - name: Build the container image
+        run: docker build -t propertymanagement:ci .

@@ -1,59 +1,11 @@
 using Microsoft.EntityFrameworkCore;
+using PropertyManagement.Application.Services;
 using PropertyManagement.Domain.Common;
 using PropertyManagement.Domain.Entities;
 using PropertyManagement.Domain.Rules;
 using PropertyManagement.Infrastructure.Persistence;
 
 namespace PropertyManagement.Infrastructure.Services;
-
-/// <summary>Input for creating or updating a property. Id is zero when creating.</summary>
-public record PropertyInput(
-    int Id,
-    string Name,
-    string AddressLine1,
-    string? AddressLine2,
-    string City,
-    string State,
-    string PostalCode);
-
-/// <summary>A page of units together with the total the filter matched.</summary>
-public record UnitPage(IReadOnlyList<Unit> Units, int TotalCount);
-
-/// <summary>Input for creating or updating a unit. Id is zero when creating.</summary>
-public record UnitInput(
-    int Id,
-    int PropertyId,
-    string UnitNumber,
-    int Bedrooms,
-    decimal MonthlyRent,
-    int UnitTypeId);
-
-public interface IPropertyService
-{
-    Task<IReadOnlyList<Property>> GetPropertiesAsync(CancellationToken cancellationToken = default);
-
-    Task<Property?> GetPropertyAsync(int id, CancellationToken cancellationToken = default);
-
-    Task<Unit?> GetUnitAsync(int id, CancellationToken cancellationToken = default);
-
-    Task<IReadOnlyList<UnitType>> GetSelectableUnitTypesAsync(
-        int? currentUnitTypeId,
-        CancellationToken cancellationToken = default);
-
-    Task<UnitPage> GetAvailableUnitsAsync(
-        DateOnly asOf,
-        int take,
-        int skip = 0,
-        CancellationToken cancellationToken = default);
-
-    Task<DomainResult> SavePropertyAsync(PropertyInput input, CancellationToken cancellationToken = default);
-
-    Task<DomainResult> DeletePropertyAsync(int id, CancellationToken cancellationToken = default);
-
-    Task<DomainResult> SaveUnitAsync(UnitInput input, CancellationToken cancellationToken = default);
-
-    Task<DomainResult> DeleteUnitAsync(int id, CancellationToken cancellationToken = default);
-}
 
 /// <summary>
 /// Maintains properties and their units. Every rule the UI relies on is re-checked here, because
@@ -192,8 +144,14 @@ public class PropertyService(PropertyManagementDbContext db) : IPropertyService
         }
 
         db.Properties.Remove(property);
-        await db.SaveChangesAsync(cancellationToken);
-        return DomainResult.Success();
+
+        // The checks above are read-then-write, so an application started for one of these units
+        // in the moment between them and this line still gets in. The foreign key stops the delete,
+        // which is the point; this turns that into the same sentence the check would have given
+        // rather than a stack trace.
+        return await RemoveOrReportInUseAsync(
+            "This property has units with rental applications and cannot be removed.",
+            cancellationToken);
     }
 
     public async Task<DomainResult> SaveUnitAsync(UnitInput input, CancellationToken cancellationToken = default)
@@ -254,8 +212,44 @@ public class PropertyService(PropertyManagementDbContext db) : IPropertyService
             db.Units.Add(unit);
         }
 
-        await db.SaveChangesAsync(cancellationToken);
-        return DomainResult.Success();
+        try
+        {
+            await db.SaveChangesAsync(cancellationToken);
+            return DomainResult.Success();
+        }
+        catch (DbUpdateException exception) when (DatabaseErrors.IsUniqueViolation(exception))
+        {
+            // Two managers added the same unit number at once: both passed the check above before
+            // either wrote, and the unique index stopped the second. Same message either way.
+            return DomainResult.Failure(
+                $"Unit {unitNumber} already exists in this property.",
+                nameof(UnitInput.UnitNumber));
+        }
+    }
+
+    public async Task<UnitApplicationImpact> GetUnitImpactAsync(
+        int unitId,
+        CancellationToken cancellationToken = default)
+    {
+        if (unitId == 0)
+        {
+            return UnitApplicationImpact.None;
+        }
+
+        // Grouped in the database rather than counted per status in a loop, so this costs one
+        // round trip however many statuses exist.
+        var counts = await db.RentalApplications
+            .AsNoTracking()
+            .Where(application => application.UnitId == unitId)
+            .GroupBy(application => application.Status)
+            .Select(group => new UnitApplicationCount(group.Key, group.Count()))
+            .ToListAsync(cancellationToken);
+
+        var hasLease = await db.Leases.AnyAsync(lease => lease.UnitId == unitId, cancellationToken);
+
+        return new UnitApplicationImpact(
+            [.. counts.OrderByDescending(entry => entry.Count).ThenBy(entry => entry.Status)],
+            hasLease);
     }
 
     public async Task<DomainResult> DeleteUnitAsync(int id, CancellationToken cancellationToken = default)
@@ -278,7 +272,29 @@ public class PropertyService(PropertyManagementDbContext db) : IPropertyService
         }
 
         db.Units.Remove(unit);
-        await db.SaveChangesAsync(cancellationToken);
-        return DomainResult.Success();
+
+        return await RemoveOrReportInUseAsync(
+            "This unit has rental applications and cannot be removed.",
+            cancellationToken);
+    }
+
+    /// <summary>
+    /// Saves a delete, and turns the foreign key refusing it into the message the check above would
+    /// have given. The check produces the good message almost every time; the constraint is what
+    /// actually guarantees nothing is destroyed out from under a live record.
+    /// </summary>
+    private async Task<DomainResult> RemoveOrReportInUseAsync(
+        string message,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await db.SaveChangesAsync(cancellationToken);
+            return DomainResult.Success();
+        }
+        catch (DbUpdateException exception) when (DatabaseErrors.IsConstraintConflict(exception))
+        {
+            return DomainResult.Failure(message);
+        }
     }
 }

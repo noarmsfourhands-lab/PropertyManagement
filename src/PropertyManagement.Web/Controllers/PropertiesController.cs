@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using PropertyManagement.Infrastructure.Services;
+using PropertyManagement.Application.Services;
 using PropertyManagement.Web.ViewModels.Properties;
 
 namespace PropertyManagement.Web.Controllers;
@@ -158,6 +158,7 @@ public class PropertiesController(IPropertyService properties) : ModalController
             }
 
             model = UnitFormViewModel.From(unit);
+            model.Impact = await properties.GetUnitImpactAsync(id, cancellationToken);
         }
 
         await PopulateUnitTypesAsync(model, cancellationToken);
@@ -168,8 +169,25 @@ public class PropertiesController(IPropertyService properties) : ModalController
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> SaveUnit(UnitFormViewModel model, CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(model);
+
+        // Read here rather than trusted from the post. The warning and the checkbox are rendered
+        // from this, and a post that simply left both out would otherwise save with no warning at
+        // all, which is the one thing this is here to prevent.
+        model.Impact = await properties.GetUnitImpactAsync(model.Id, cancellationToken);
+
         if (!ModelState.IsValid)
         {
+            await PopulateUnitTypesAsync(model, cancellationToken);
+            return ModalValidationFailed(UnitFormPartial, model);
+        }
+
+        if (model.NeedsAcknowledgement && !model.Acknowledged)
+        {
+            AddError(
+                nameof(model.Acknowledged),
+                "Confirm you have read what this changes before saving.");
+
             await PopulateUnitTypesAsync(model, cancellationToken);
             return ModalValidationFailed(UnitFormPartial, model);
         }
@@ -178,10 +196,8 @@ public class PropertiesController(IPropertyService properties) : ModalController
 
         if (result.Failed)
         {
-            // Rule failures about the type belong on the type field, not in the summary.
-            AddError(result.Error!.Contains("Unit type", StringComparison.Ordinal)
-                ? nameof(model.UnitTypeId)
-                : null, result.Error);
+            // The rule says which field it refused, so nothing here has to read the message.
+            AddError(result.Field, result.Error!);
 
             await PopulateUnitTypesAsync(model, cancellationToken);
             return ModalValidationFailed(UnitFormPartial, model);

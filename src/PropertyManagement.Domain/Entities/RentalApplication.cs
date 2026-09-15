@@ -13,6 +13,19 @@ public class RentalApplication
 
     public Unit Unit { get; set; } = null!;
 
+    /// <summary>
+    /// The property and unit as they were named when the application was started.
+    ///
+    /// Lists and past decisions describe an application long after it stops moving, and a record
+    /// should describe itself: reading these through the unit means renaming a property rewrites
+    /// what every historical decision appears to say. The wizard still shows the unit's live rent
+    /// and type, because that is the unit somebody is applying for right now, and a manager editing
+    /// it is told what it affects.
+    /// </summary>
+    public string PropertyName { get; set; } = string.Empty;
+
+    public string UnitNumber { get; set; } = string.Empty;
+
     public ApplicationStatus Status { get; set; } = ApplicationStatus.Draft;
 
     /// <summary>Section one. Always present; individual fields stay null until first saved.</summary>
@@ -38,9 +51,16 @@ public class RentalApplication
     public DateTime? ResidenceHistorySavedAtUtc { get; set; }
 
     /// <summary>
-    /// Bonus 5a. Per-section concurrency tokens. Two applicants saving different sections do not
-    /// collide, while a second save of the same stale section is rejected. SQL Server allows one
-    /// rowversion per table, so these are application-managed GUIDs marked as concurrency tokens.
+    /// Per-section concurrency tokens. Two applicants saving different sections do not collide,
+    /// while a second save of the same stale section is rejected. SQL Server allows one rowversion
+    /// per table, so these are application-managed GUIDs marked as concurrency tokens instead.
+    ///
+    /// What each token covers is the section's own save, and not the rows inside it. Residences are
+    /// added and removed one request at a time, each against current storage, so two people working
+    /// on the same history cannot lose each other's rows and need no token to say so. Moving the
+    /// token when a row changes was tried and reverted: the residence modal is opened from the page
+    /// that holds the token, so an applicant adding a residence invalidated their own page and had
+    /// their next Continue refused as somebody else's edit.
     /// </summary>
     public Guid ApplicantInformationVersion { get; set; } = Guid.NewGuid();
 
@@ -54,7 +74,7 @@ public class RentalApplication
 
     public DateTime? DecidedAtUtc { get; set; }
 
-    /// <summary>Bonus 2. The property manager currently holding the application, when Under Review.</summary>
+    /// <summary>The property manager currently holding the application, when Under Review.</summary>
     public string? ClaimedByUserId { get; set; }
 
     public DateTime? ClaimedAtUtc { get; set; }

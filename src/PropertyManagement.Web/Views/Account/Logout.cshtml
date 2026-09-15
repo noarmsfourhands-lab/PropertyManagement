@@ -1,0 +1,25 @@
+@{
+    ViewData["Title"] = "Sign out";
+}
+@*
+    Shown to someone who reached /Account/Logout directly. The sign-out button in the header posts
+    straight through and never lands here.
+*@
+<div class="row justify-content-center">
+    <div class="col-md-6 col-lg-5">
+        <div class="card shadow-sm">
+            <div class="card-body p-4">
+                <h1 class="h4 mb-3">Sign out</h1>
+
+                <p class="text-muted">
+                    You are signed in as <strong>@User.GetDisplayName()</strong>.
+                </p>
+
+                <form asp-action="Logout" method="post" class="d-flex gap-2">
+                    <button type="submit" class="btn btn-primary">Sign out</button>
+                    <a class="btn btn-outline-secondary" asp-controller="Home" asp-action="Index">Stay signed in</a>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>

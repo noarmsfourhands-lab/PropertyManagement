@@ -1,0 +1,7 @@
+{
+  "//": "Pins the SDK band so a patch release that sharpens an analyzer cannot turn a green build red with no commit behind it. TreatWarningsAsErrors makes that a real risk rather than a theoretical one. rollForward is latestFeature rather than latestPatch so the build still works on whatever 10.0.x the container image happens to ship, which a strict patch pin would break.",
+  "sdk": {
+    "version": "10.0.103",
+    "rollForward": "latestFeature"
+  }
+}

@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using PropertyManagement.Domain.Enums;
-using PropertyManagement.Infrastructure.Services;
+using PropertyManagement.Application.Services;
 using PropertyManagement.Web.ViewModels.Applications;
 
 namespace PropertyManagement.Web.ViewComponents;
@@ -26,7 +26,7 @@ public class ApplicationNotesViewComponent(INoteService notes) : ViewComponent
         return View(new NoteListViewModel
         {
             ApplicationId = applicationId,
-            Notes = await notes.GetNotesAsync(applicationId)
+            Notes = await notes.GetNotesAsync(applicationId, HttpContext.RequestAborted)
         });
     }
 }

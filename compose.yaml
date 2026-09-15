@@ -1,0 +1,88 @@
+# Brings up SQL Server and the application together, so the whole thing runs with:
+#
+#   docker compose up
+#
+# and nothing needs installing beyond Docker itself. The application still targets SQL Server, as
+# the assessment requires; this only saves a reviewer from installing an instance to see it work.
+
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "${MSSQL_SA_PASSWORD:-Local_Dev_Password_1}"
+      MSSQL_PID: Express
+    ports:
+      # Bound to the loopback address only. Published as "1433:1433" it would listen on every
+      # interface, which with a password committed to this file means anything that can route to
+      # the machine can sign in as sa. Still reachable from a client on the same machine.
+      - "127.0.0.1:1433:1433"
+    volumes:
+      - sqlserver-data:/var/opt/mssql
+    healthcheck:
+      # The application fails fast without a database, so it waits for this rather than racing
+      # a server that takes a good few seconds to accept connections on first boot.
+      test:
+        - CMD-SHELL
+        - /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$$MSSQL_SA_PASSWORD" -C -Q "SELECT 1" || exit 1
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  # Creates the database and the application's own login, then exits. The web container waits for
+  # it to succeed, so the application never needs sa: it signs in as a login that owns one database
+  # and has no rights on the server at all. Running migrations as sa would work and would mean a
+  # compromised web container could read and drop every other database on the instance.
+  provision:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+    environment:
+      MSSQL_SA_PASSWORD: "${MSSQL_SA_PASSWORD:-Local_Dev_Password_1}"
+      APP_DB_PASSWORD: "${APP_DB_PASSWORD:-Local_App_Password_1}"
+    entrypoint:
+      - /bin/bash
+      - -c
+      - |
+        set -e
+        /opt/mssql-tools18/bin/sqlcmd -S sqlserver -U sa -P "$$MSSQL_SA_PASSWORD" -C -b -Q "
+          IF DB_ID('PropertyManagement') IS NULL CREATE DATABASE PropertyManagement;
+          IF SUSER_ID('propertymanagement_app') IS NULL
+            CREATE LOGIN propertymanagement_app WITH PASSWORD = '$$APP_DB_PASSWORD',
+              CHECK_POLICY = OFF, DEFAULT_DATABASE = PropertyManagement;
+        "
+        /opt/mssql-tools18/bin/sqlcmd -S sqlserver -U sa -P "$$MSSQL_SA_PASSWORD" -C -b -d PropertyManagement -Q "
+          IF USER_ID('propertymanagement_app') IS NULL
+            CREATE USER propertymanagement_app FOR LOGIN propertymanagement_app;
+          ALTER ROLE db_owner ADD MEMBER propertymanagement_app;
+        "
+    restart: "no"
+
+  web:
+    build:
+      context: .
+    depends_on:
+      provision:
+        condition: service_completed_successfully
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_HTTP_PORTS: "8080"
+      DataProtection__KeyPath: /keys
+      # Overrides the connection string in appsettings.json by configuration key, so the file
+      # checked into the repository still points at a local instance for anyone not using Docker.
+      ConnectionStrings__DefaultConnection: "Server=sqlserver,1433;Database=PropertyManagement;User Id=propertymanagement_app;Password=${APP_DB_PASSWORD:-Local_App_Password_1};TrustServerCertificate=True;MultipleActiveResultSets=true"
+    volumes:
+      # Data Protection keys. Without somewhere durable to put them the framework writes them
+      # inside the container, so every restart issues a new key and signs everyone out; a second
+      # replica would reject the first one's cookies outright. The Dockerfile creates this
+      # directory owned by the non-root user, so the named volume inherits that ownership.
+      - dataprotection-keys:/keys
+    ports:
+      - "127.0.0.1:8080:8080"
+
+volumes:
+  # Named, so the seeded database survives `docker compose down` and only a `down -v` resets it.
+  sqlserver-data:
+  dataprotection-keys:

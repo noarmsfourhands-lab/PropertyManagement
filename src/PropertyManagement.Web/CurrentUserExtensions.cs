@@ -1,7 +1,7 @@
 using System.Security.Claims;
 using PropertyManagement.Domain.Enums;
 using PropertyManagement.Infrastructure.Identity;
-using PropertyManagement.Infrastructure.Services;
+using PropertyManagement.Application.Services;
 
 namespace PropertyManagement.Web;
 

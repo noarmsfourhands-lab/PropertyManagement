@@ -1,0 +1,218 @@
+@model PropertyManagement.Application.Services.ManagerDashboard
+@using PropertyManagement.Domain.Enums
+@using PropertyManagement.Web.ViewModels.Applications
+@{
+    ViewData["Title"] = "Dashboard";
+}
+
+<div class="d-flex justify-content-between align-items-baseline mb-4">
+    <div>
+        <h1 class="h3 mb-1">Dashboard</h1>
+        <p class="text-muted small mb-0">As of @Model.AsOf.ToString("d MMMM yyyy")</p>
+    </div>
+    <a class="btn btn-sm btn-outline-secondary"
+       asp-controller="RentalApplications" asp-action="Index">All applications</a>
+</div>
+
+@*
+    Each tile is a link to the list already filtered to what it counts, so the number is a way in
+    rather than a thing to read and then go looking for.
+*@
+<div class="row g-3 mb-4">
+    <div class="col-6 col-lg-3">
+        <a class="card shadow-sm h-100 text-decoration-none"
+           asp-controller="RentalApplications" asp-action="Index"
+           asp-route-status="@((int)ApplicationStatus.Submitted)">
+            <div class="card-body">
+                <div class="text-muted small text-uppercase">Awaiting review</div>
+                <div class="display-6 fw-semibold lh-1 my-2">@Model.Workload.AwaitingReview</div>
+                <div class="small text-muted">Submitted, nobody has picked them up</div>
+            </div>
+        </a>
+    </div>
+
+    <div class="col-6 col-lg-3">
+        <a class="card shadow-sm h-100 text-decoration-none"
+           asp-controller="RentalApplications" asp-action="Index"
+           asp-route-status="@((int)ApplicationStatus.UnderReview)">
+            <div class="card-body">
+                <div class="text-muted small text-uppercase">With you</div>
+                <div class="display-6 fw-semibold lh-1 my-2">@Model.Workload.UnderReviewByMe</div>
+                <div class="small text-muted">
+                    @if (Model.Workload.UnderReviewByOthers > 0)
+                    {
+                        <text>@Model.Workload.UnderReviewByOthers with other managers</text>
+                    }
+                    else
+                    {
+                        <text>Claimed by you, not yet decided</text>
+                    }
+                </div>
+            </div>
+        </a>
+    </div>
+
+    <div class="col-6 col-lg-3">
+        <a class="card shadow-sm h-100 text-decoration-none"
+           asp-controller="RentalApplications" asp-action="Index"
+           asp-route-status="@((int)ApplicationStatus.Returned)">
+            <div class="card-body">
+                <div class="text-muted small text-uppercase">Returned</div>
+                <div class="display-6 fw-semibold lh-1 my-2">@Model.Workload.Returned</div>
+                <div class="small text-muted">Waiting on the applicant, not on you</div>
+            </div>
+        </a>
+    </div>
+
+    <div class="col-6 col-lg-3">
+        <a class="card shadow-sm h-100 text-decoration-none"
+           asp-controller="Units" asp-action="Browse">
+            <div class="card-body">
+                <div class="text-muted small text-uppercase">Occupancy</div>
+                <div class="display-6 fw-semibold lh-1 my-2">@Model.PercentLeased<span class="fs-5">%</span></div>
+                <div class="small text-muted">@Model.LeasedUnits of @Model.TotalUnits units leased</div>
+            </div>
+        </a>
+    </div>
+</div>
+
+<div class="row g-4">
+    <div class="col-lg-7">
+        <div class="card shadow-sm h-100">
+            <div class="card-header bg-white fw-semibold">Waiting longest</div>
+
+            @if (Model.Waiting.Count == 0)
+            {
+                <div class="card-body text-center text-muted py-5">
+                    <p class="mb-0">Nothing is waiting for review.</p>
+                </div>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th scope="col">Property</th>
+                                <th scope="col">Unit</th>
+                                <th scope="col">Applicant</th>
+                                <th scope="col" class="text-end">Waiting</th>
+                                <th scope="col" class="text-end">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        @foreach (var application in Model.Waiting)
+                        {
+                            <tr>
+                                <td>@application.PropertyName</td>
+                                <td class="fw-semibold">@application.UnitNumber</td>
+                                <td>@application.ApplicantName</td>
+                                <td class="text-end">
+                                    @*
+                                        Amber past a week. The threshold is a judgement about this
+                                        office rather than a rule of the domain, so it lives in the
+                                        view and not in the model.
+                                    *@
+                                    <span class="status @(application.DaysWaiting >= 7 ? "status-aging" : "status-fresh")">
+                                        @(application.DaysWaiting == 0
+                                            ? "today"
+                                            : application.DaysWaiting == 1 ? "1 day" : $"{application.DaysWaiting} days")
+                                    </span>
+                                </td>
+                                <td class="text-end">
+                                    <a class="btn btn-sm btn-outline-secondary"
+                                       asp-controller="RentalApplications" asp-action="Edit"
+                                       asp-route-id="@application.Id">Review</a>
+                                </td>
+                            </tr>
+                        }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    </div>
+
+    <div class="col-lg-5">
+        <div class="card shadow-sm h-100">
+            <div class="card-header bg-white fw-semibold">Occupancy by property</div>
+
+            @if (Model.Properties.Count == 0)
+            {
+                <div class="card-body text-center text-muted py-5">
+                    <p class="mb-0">No properties yet.</p>
+                </div>
+            }
+            else
+            {
+                <ul class="list-group list-group-flush">
+                @foreach (var property in Model.Properties)
+                {
+                    <li class="list-group-item">
+                        <div class="d-flex justify-content-between align-items-baseline mb-1">
+                            <a class="text-decoration-none"
+                               asp-controller="Properties" asp-action="Details"
+                               asp-route-id="@property.PropertyId">@property.Name</a>
+                            <span class="small text-muted">@property.Leased of @property.Units</span>
+                        </div>
+                        <div class="progress" role="progressbar"
+                             aria-label="@property.Name occupancy"
+                             aria-valuenow="@property.PercentLeased" aria-valuemin="0" aria-valuemax="100"
+                             style="height: .5rem">
+                            <div class="progress-bar" style="width: @property.PercentLeased%"></div>
+                        </div>
+                    </li>
+                }
+                </ul>
+            }
+        </div>
+    </div>
+</div>
+
+<div class="card shadow-sm mt-4">
+    <div class="card-header bg-white fw-semibold">Recent decisions</div>
+
+    @if (Model.Decisions.Count == 0)
+    {
+        <div class="card-body text-center text-muted py-5">
+            <p class="mb-0">No decisions have been recorded yet.</p>
+        </div>
+    }
+    else
+    {
+        <ul class="list-group list-group-flush">
+        @foreach (var decision in Model.Decisions)
+        {
+            <li class="list-group-item">
+                <div class="d-flex justify-content-between align-items-start gap-3">
+                    <div>
+                        <span class="@ApplicationListViewModel.BadgeClassFor(OutcomeStatus(decision.Outcome))">
+                            @decision.Outcome
+                        </span>
+                        <a class="ms-2 text-decoration-none"
+                           asp-controller="RentalApplications" asp-action="Edit"
+                           asp-route-id="@decision.ApplicationId">
+                            @decision.PropertyName &middot; Unit @decision.UnitNumber
+                        </a>
+                        @if (!string.IsNullOrWhiteSpace(decision.Comment))
+                        {
+                            <p class="mb-0 mt-1 small text-muted">@decision.Comment</p>
+                        }
+                    </div>
+                    <div class="small text-muted text-end text-nowrap">
+                        @decision.ActorName
+                        <br />@TimeDisplay.Day(decision.OccurredAtUtc)
+                    </div>
+                </div>
+            </li>
+        }
+        </ul>
+    }
+</div>
+
+@functions {
+    // The badge colours are keyed by status, and an outcome maps onto exactly one of them, so the
+    // list borrows the same palette rather than inventing a second one that could drift from it.
+    private static ApplicationStatus OutcomeStatus(ReviewOutcome outcome) =>
+        PropertyManagement.Domain.Rules.ReviewRules.ResultingStatus(outcome);
+}

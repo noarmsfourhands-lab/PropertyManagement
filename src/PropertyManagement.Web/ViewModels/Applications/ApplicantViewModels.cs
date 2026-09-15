@@ -1,5 +1,5 @@
 using System.ComponentModel.DataAnnotations;
-using PropertyManagement.Infrastructure.Services;
+using PropertyManagement.Application.Services;
 
 namespace PropertyManagement.Web.ViewModels.Applications;
 

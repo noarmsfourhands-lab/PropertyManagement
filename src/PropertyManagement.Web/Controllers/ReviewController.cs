@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using PropertyManagement.Domain.Rules;
-using PropertyManagement.Infrastructure.Services;
+using PropertyManagement.Application.Services;
 using PropertyManagement.Web.ViewModels.Applications;
 
 namespace PropertyManagement.Web.Controllers;
@@ -61,12 +61,9 @@ public class ReviewController(
 
         if (result.Failed)
         {
-            // A missing comment belongs on the comment box; anything else is about the decision.
-            AddError(
-                result.Error!.Contains("comment", StringComparison.OrdinalIgnoreCase)
-                    ? nameof(model.Comment)
-                    : null,
-                result.Error);
+            // A missing comment lands on the comment box because the rule said so, not because
+            // this read the word "comment" out of the sentence it produced.
+            AddError(result.Field, result.Error!);
 
             await DescribeAsync(model, cancellationToken);
             return ModalValidationFailed(ReviewFormPartial, model);

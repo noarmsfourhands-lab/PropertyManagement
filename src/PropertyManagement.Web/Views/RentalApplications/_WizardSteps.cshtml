@@ -5,27 +5,40 @@
     Where the applicant is in the application. A step is a link only once the work before it has
     been saved, so the indicator cannot be used to skip a section the server has not accepted.
 
+    A step that cannot be opened says why. It sits in a row that looks like tabs, so one that
+    quietly ignores a click reads as broken rather than as locked.
+
     The loop variable is not called "section": Razor reads @section as its own directive.
 *@
 <ol class="nav nav-pills mb-3 gap-2">
     @foreach (var step in ApplicationWizard.Order)
     {
         var label = ApplicationWizardViewModel.LabelFor(step);
+        var locked = Model.WhySectionIsLocked(step);
 
         <li class="nav-item">
             @if (step == Model.CurrentSection)
             {
-                <span class="nav-link active">@label</span>
+                <span class="nav-link active" aria-current="step">@label</span>
             }
-            else if (Model.IsSectionReachable(step))
+            else if (locked is null)
             {
                 <a class="nav-link border" asp-action="Edit"
                    asp-route-id="@Model.ApplicationId" asp-route-section="@step">@label</a>
             }
             else
             {
-                <span class="nav-link text-muted">@label</span>
+                @* aria-disabled rather than nothing at all: a screen reader should hear that this
+                   is a step of the form that is not open yet, not read it as a plain heading. *@
+                <span class="nav-link tw-step-locked" aria-disabled="true" title="@locked">
+                    @label
+                </span>
             }
         </li>
     }
 </ol>
+
+@if (ApplicationWizard.Order.Select(Model.WhySectionIsLocked).FirstOrDefault(reason => reason is not null) is { } hint)
+{
+    <p class="small text-muted mb-3">@hint</p>
+}

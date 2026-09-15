@@ -1,7 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using PropertyManagement.Domain.Entities;
-using PropertyManagement.Infrastructure.Services;
+using PropertyManagement.Application.Services;
 
 namespace PropertyManagement.Web.ViewModels.Properties;
 
@@ -92,7 +92,23 @@ public class UnitFormViewModel
     /// </summary>
     public IEnumerable<SelectListItem> UnitTypeChoices { get; set; } = [];
 
+    /// <summary>
+    /// What already references this unit. Empty when adding one, and when nothing does.
+    /// </summary>
+    public UnitApplicationImpact Impact { get; set; } = UnitApplicationImpact.None;
+
+    /// <summary>
+    /// Whether the manager has read the warning. Only asked for when something references the unit,
+    /// and checked on the server as well as rendered, because a post that simply omits the field
+    /// would otherwise skip the whole thing.
+    /// </summary>
+    [Display(Name = "I understand this changes what those applications show")]
+    public bool Acknowledged { get; set; }
+
     public bool IsNew => Id == 0;
+
+    /// <summary>Whether to ask before saving. Never for a unit that does not exist yet.</summary>
+    public bool NeedsAcknowledgement => !IsNew && Impact.Any;
 
     public string Title => IsNew ? "Add unit" : $"Edit unit {UnitNumber}";
 

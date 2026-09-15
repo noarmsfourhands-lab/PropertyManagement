@@ -39,17 +39,22 @@
                     </div>
 
                     <div class="row">
-                        <div class="col-sm-6 mb-3">
+                        <div class="col-sm-6 mb-2">
                             <label asp-for="Password" class="form-label"></label>
-                            <input asp-for="Password" class="form-control" autocomplete="new-password" />
+                            <input asp-for="Password" class="form-control" autocomplete="new-password"
+                                   aria-describedby="password-rule" />
                             <span asp-validation-for="Password" class="text-danger small"></span>
                         </div>
-                        <div class="col-sm-6 mb-3">
+                        <div class="col-sm-6 mb-2">
                             <label asp-for="ConfirmPassword" class="form-label"></label>
                             <input asp-for="ConfirmPassword" class="form-control" autocomplete="new-password" />
                             <span asp-validation-for="ConfirmPassword" class="text-danger small"></span>
                         </div>
                     </div>
+
+                    @* Under the row rather than under one column: in half the width it wraps to
+                       four lines and pushes the two fields out of alignment. *@
+                    <div id="password-rule" class="form-text small mb-3">@Model.PasswordRule</div>
 
                     <fieldset class="mb-3">
                         <legend class="form-label fs-6">@Html.DisplayNameFor(m => m.Role)</legend>

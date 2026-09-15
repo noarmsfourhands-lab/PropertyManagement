@@ -7,6 +7,31 @@ apply, and are issued a twelve-month lease when approved.
 Built with .NET 10, ASP.NET Core MVC with Razor, Entity Framework Core code-first against SQL
 Server, and ASP.NET Identity. No single-page application framework is used.
 
+All five optional items are implemented as well: paging and sorting in the database behind a
+reusable grid component over an OpenAPI-documented JSON endpoint, a review queue where a manager
+claims an application before deciding it, manager-only notes, saving a section that is still
+incomplete with the summary listing what blocks submission, and more than one applicant on an
+application with per-section concurrency. [DESIGN.md](DESIGN.md) maps every requirement to where it
+is met and explains the reasoning.
+
+## Running it with Docker
+
+The quickest way to see it working, and the only one that needs nothing installed but Docker:
+
+```bash
+docker compose up
+```
+
+That brings up SQL Server and the application together, waits for the database to accept
+connections, then creates it, migrates it and seeds it. The application is at
+<http://localhost:8080>; sign in with any of the [seeded accounts](#seeded-accounts) below.
+
+The database lives in a named volume, so it survives `docker compose down`. Use
+`docker compose down -v` to throw it away and start from a fresh seed. SQL Server is published on
+1433 as well, if you would rather look at the data with a client.
+
+Everything below describes running it directly instead, against an instance of your own.
+
 ## Prerequisites
 
 | Requirement | Version used here |
@@ -79,6 +104,10 @@ produces a working system.
 dotnet run --project src/PropertyManagement.Web
 ```
 
+That serves <http://localhost:5204>. Add `--launch-profile https` for <https://localhost:7214>
+instead. The first run creates the database, applies the migrations and seeds it, so there is
+nothing to do beforehand but have SQL Server reachable.
+
 ## Seeded accounts
 
 Seeding is idempotent and runs from a fixed random seed, so restarting never duplicates data and a
@@ -92,7 +121,12 @@ rebuilt database comes back identical. Every seeded account uses the same passwo
 The seed also creates unit-type lookups including one deactivated type, three properties with their
 units, and applications in every status so each screen has something to show. Volume, the random
 seed, and the demo password are all configurable under the `Seeding` section of `appsettings.json`;
-set `Seeding:Enabled` to `false` to apply migrations without writing demo data.
+`Seeding:Enabled` controls whether any of it is written. It is off in `appsettings.json` and on in
+`appsettings.Development.json`, so running locally gets a full database and any other environment
+gets an empty one unless someone deliberately asks otherwise.
+
+Migrations are applied at start-up. `Database:MigrateOnStartup` turns that off, for a deployment
+that runs migrations as its own step rather than letting several replicas race the same one.
 
 ## Tests
 
@@ -100,39 +134,55 @@ set `Seeding:Enabled` to `false` to apply migrations without writing demo data.
 dotnet test
 ```
 
-216 tests across three suites, none of which needs SQL Server:
+269 tests across three suites, none of which needs SQL Server:
 
 | Suite | What it covers |
 | --- | --- |
 | `PropertyManagement.Domain.Tests` | The business rules, as plain function calls over domain objects |
 | `PropertyManagement.Infrastructure.Tests` | The model, the queries and the services, against SQLite held in memory |
-| `PropertyManagement.Web.Tests` | Section validation, and what the application page offers |
+| `PropertyManagement.Web.Tests` | Section validation, what the application page offers, and the whole pipeline over HTTP |
 
-The second suite is what proves the schema actually builds, the queries translate, the per-section
+The second suite proves the schema actually builds, the queries translate, the per-section
 concurrency tokens behave as configured, and the seeder is safe to run twice. SQLite is used there
 only because it enforces the same constraints without needing an installation; the application
 itself runs on SQL Server.
+
+The third suite ends with a set of tests that boot the real application in process, sign in through
+the real login form, and make real requests. A service refusing an operation is not the same as the
+route refusing it, and those are the tests that can tell the difference: one applicant asking for
+another's application gets 404 rather than 403, because a 403 would confirm the id exists.
 
 ## Project structure
 
 | Project | Holds |
 | --- | --- |
 | `src/PropertyManagement.Domain` | Entities, enums, and the business rules. No framework dependencies. |
-| `src/PropertyManagement.Infrastructure` | EF Core context and mappings, migrations, Identity, seeding, services. |
+| `src/PropertyManagement.Application` | The service contracts and the records they take and return. Depends on the domain and nothing else. |
+| `src/PropertyManagement.Infrastructure` | EF Core context and mappings, migrations, Identity, seeding, and the service implementations. |
 | `src/PropertyManagement.Web` | Controllers, view models, Razor views, partial views, view components. |
 | `tests/PropertyManagement.Domain.Tests` | Unit tests for the business rules. |
 | `tests/PropertyManagement.Infrastructure.Tests` | Model, query, service and seeding tests against a real database. |
-| `tests/PropertyManagement.Web.Tests` | Validation and presentation-decision tests. |
+| `tests/PropertyManagement.Web.Tests` | Validation, presentation decisions, and end-to-end requests through the real pipeline. |
 
-The dependency arrows all point inward: the web project depends on infrastructure and domain,
-infrastructure depends on domain, and the domain depends on nothing. That is what lets the rules be
-tested directly.
+The dependency arrows all point inward: the domain depends on nothing, the application layer on the
+domain, and infrastructure on both. Controllers and view models name only the application layer, so
+nothing outside infrastructure knows the data is in Entity Framework at all. The web project still
+references infrastructure, in one place: `Program.cs`, where the implementations are registered.
+Swapping a service for another implementation is a change to that file and to nothing else.
 
 ## Trying it out
 
-Signed in as a **property manager** you can maintain properties and their units through modals,
-open any application, claim it for review, and record an outcome. Approving issues a twelve-month
-lease, which immediately takes the unit out of the available list.
+Signed in as a **property manager** you can maintain properties and their units through modals and
+work the review queue from the dashboard. Open a submitted application and the only action offered
+is *Claim for review*: claiming is required before a decision, so an application under review has
+exactly one manager and two people cannot both reach the outcome form. Once claimed you can record
+an outcome, or release it back to the queue. Any manager can release a claim, including someone
+else's, so nothing is stuck when a colleague is unavailable; the history records which it was.
+Approving issues a twelve-month lease, which immediately takes the unit out of the available list.
+
+Editing a unit that applications already point at asks you to confirm first, and tells you how many
+there are and what status they are in, because an application reads its rent and type from the unit
+as it stands.
 
 Signed in as an **applicant** the home page lists the units available today. Applying opens the
 application: one page, one section at a time, with residences managed through a modal and a summary
@@ -142,5 +192,8 @@ becomes editable again so it can be corrected and resubmitted.
 ## Design notes
 
 See [DESIGN.md](DESIGN.md) for the reasoning behind the model, how the single-page application and
-the modal contract work, how each requirement is met, and which bonus items were and were not
-attempted.
+the modal contract work, how each requirement is met, and the trade-offs behind the decisions that
+could reasonably have gone the other way.
+
+While the application is running in Development the JSON endpoint behind the grid describes itself
+at <http://localhost:5204/openapi/v1.json>.

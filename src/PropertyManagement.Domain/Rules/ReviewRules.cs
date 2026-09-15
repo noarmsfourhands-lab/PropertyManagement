@@ -20,7 +20,7 @@ public static class ReviewRules
         }
 
         return string.IsNullOrWhiteSpace(comment)
-            ? DomainResult.Failure($"A comment is required when the outcome is {outcome}.")
+            ? DomainResult.Failure($"A comment is required when the outcome is {outcome}.", field: "Comment")
             : DomainResult.Success();
     }
 

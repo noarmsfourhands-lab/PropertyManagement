@@ -28,7 +28,12 @@ public static class LeaseTerm
             RentalApplication = application,
             StartDate = startDate,
             EndDate = EndDateFor(startDate),
-            MonthlyRent = unit.MonthlyRent
+            MonthlyRent = unit.MonthlyRent,
+
+            // Copied, not referenced, for the same reason the rent is: the lease has to keep
+            // describing what it is for after the unit it points at has been edited.
+            PropertyName = unit.Property?.Name ?? string.Empty,
+            UnitNumber = unit.UnitNumber
         };
 
     /// <summary>A unit whose lease term covers <paramref name="asOf"/> is not available.</summary>

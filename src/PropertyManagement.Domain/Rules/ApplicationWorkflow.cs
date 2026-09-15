@@ -144,7 +144,7 @@ public static class ApplicationWorkflow
             : DomainResult.Failure($"An application in {application.Status} status cannot be withdrawn.");
     }
 
-    /// <summary>Bonus 2. A manager claims a submitted application before reviewing it.</summary>
+    /// <summary>A manager claims a submitted application before reviewing it.</summary>
     public static DomainResult CanClaim(RentalApplication application)
     {
         ArgumentNullException.ThrowIfNull(application);
@@ -154,24 +154,42 @@ public static class ApplicationWorkflow
             : DomainResult.Failure($"Only a Submitted application can be claimed; this one is {application.Status}.");
     }
 
-    /// <summary>Bonus 2. Only the manager holding the application may release it back to the queue.</summary>
-    public static DomainResult CanRelease(RentalApplication application, string userId)
+    /// <summary>
+    /// Any property manager may release an application back to the queue.
+    ///
+    /// Deliberately not restricted to the manager holding it. Claiming is only possible from
+    /// Submitted, so once an application is Under Review nobody but the holder could move it, and
+    /// a manager who leaves, is locked out or is simply away left it stuck for everyone with no way
+    /// back. Reviewing still requires holding the claim, so the one-reviewer-at-a-time rule stands:
+    /// taking over someone else's work is two deliberate steps, release then claim, and the audit
+    /// trail records that the release was of somebody else's claim.
+    /// </summary>
+    public static DomainResult CanRelease(RentalApplication application)
     {
         ArgumentNullException.ThrowIfNull(application);
 
-        if (application.Status != ApplicationStatus.UnderReview)
-        {
-            return DomainResult.Failure("Only an application that is Under Review can be released.");
-        }
-
-        return application.ClaimedByUserId == userId
+        return application.Status == ApplicationStatus.UnderReview
             ? DomainResult.Success()
-            : DomainResult.Failure("This application is claimed by another property manager.");
+            : DomainResult.Failure("Only an application that is Under Review can be released.");
+    }
+
+    /// <summary>Whether the claim being released belongs to somebody other than this manager.</summary>
+    public static bool IsClaimedBySomeoneElse(RentalApplication application, string userId)
+    {
+        ArgumentNullException.ThrowIfNull(application);
+
+        return application.ClaimedByUserId is not null && application.ClaimedByUserId != userId;
     }
 
     /// <summary>
-    /// A manager may complete a review of a submitted application, or of one they have claimed.
-    /// An application claimed by someone else is not reviewable by this manager.
+    /// Only the manager holding an application may complete its review, and holding it is the only
+    /// way in: a Submitted application has to be claimed first.
+    ///
+    /// Claiming was originally optional, which made the queue advisory. Two managers could open the
+    /// same submitted application and both reach the outcome form, and the second to press the
+    /// button would find their decision refused by the status check with no warning beforehand.
+    /// Requiring the claim makes the queue mean what it says: an application under review has
+    /// exactly one manager, named, and anyone else has to take it off them deliberately.
     /// </summary>
     public static DomainResult CanReview(RentalApplication application, string userId)
     {
@@ -179,7 +197,7 @@ public static class ApplicationWorkflow
 
         if (application.Status == ApplicationStatus.Submitted)
         {
-            return DomainResult.Success();
+            return DomainResult.Failure("Claim this application before reviewing it.");
         }
 
         if (application.Status != ApplicationStatus.UnderReview)

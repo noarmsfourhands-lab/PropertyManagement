@@ -26,7 +26,9 @@ public static class UnitTypeSelection
     public static DomainResult Validate(UnitType unitType, int? currentUnitTypeId) =>
         CanAssign(unitType, currentUnitTypeId)
             ? DomainResult.Success()
-            : DomainResult.Failure($"Unit type '{unitType.Name}' is inactive and cannot be selected.");
+            : DomainResult.Failure(
+                $"Unit type '{unitType.Name}' is inactive and cannot be selected.",
+                field: nameof(Unit.UnitTypeId));
 
     /// <summary>
     /// The types to offer in a dropdown: every active type, plus the unit's current type when

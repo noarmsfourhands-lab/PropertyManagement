@@ -21,7 +21,9 @@ public static class ResidenceRules
     {
         if (moveInDate > asOf)
         {
-            return DomainResult.Failure("Move-in date cannot be in the future.");
+            return DomainResult.Failure(
+                "Move-in date cannot be in the future.",
+                field: nameof(Residence.MoveInDate));
         }
 
         if (moveOutDate is null)
@@ -31,11 +33,13 @@ public static class ResidenceRules
 
         if (moveOutDate < moveInDate)
         {
-            return DomainResult.Failure("Move-out date cannot be before the move-in date.");
+            return DomainResult.Failure(
+                "Move-out date cannot be before the move-in date.",
+                field: nameof(Residence.MoveOutDate));
         }
 
         return moveOutDate > asOf
-            ? DomainResult.Failure("Move-out date cannot be in the future.")
+            ? DomainResult.Failure("Move-out date cannot be in the future.", field: nameof(Residence.MoveOutDate))
             : DomainResult.Success();
     }
 

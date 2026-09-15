@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using PropertyManagement.Domain.Enums;
 using PropertyManagement.Domain.Rules;
+using PropertyManagement.Application.Services;
 using PropertyManagement.Infrastructure.Services;
 
 namespace PropertyManagement.Infrastructure.Tests;
@@ -251,6 +252,168 @@ public class RentalApplicationServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task Starting_an_application_fills_the_applicant_from_their_account()
+    {
+        await using var db = _database.CreateContext();
+        await TestData.AddAccountAsync(
+            db, TestData.Applicant, "Robin", "Alvarez", "robin@example.test", "555-0170");
+        var property = await TestData.AddPropertyWithUnitsAsync(db);
+
+        var result = await ServiceOver(db).StartAsync(
+            property.Units.First().Id,
+            new Actor(TestData.Applicant, "Robin Alvarez"),
+            TestData.Today);
+
+        Assert.True(result.Succeeded);
+
+        await using var check = _database.CreateContext();
+        var stored = await check.RentalApplications.FirstAsync(entity => entity.Id == result.Value);
+
+        Assert.Equal("Robin", stored.ApplicantInformation.FirstName);
+        Assert.Equal("Alvarez", stored.ApplicantInformation.LastName);
+        Assert.Equal("robin@example.test", stored.ApplicantInformation.Email);
+        Assert.Equal("555-0170", stored.ApplicantInformation.Phone);
+
+        // The account holds no address, so those are left for the applicant to fill in.
+        Assert.Null(stored.ApplicantInformation.AddressLine1);
+        Assert.Null(stored.ApplicantInformation.City);
+    }
+
+    [Fact]
+    public async Task A_prefilled_section_still_has_to_be_saved_before_it_counts()
+    {
+        await using var db = _database.CreateContext();
+        await TestData.AddAccountAsync(db, TestData.Applicant);
+        var property = await TestData.AddPropertyWithUnitsAsync(db);
+
+        var result = await ServiceOver(db).StartAsync(
+            property.Units.First().Id,
+            new Actor(TestData.Applicant, "Robin Alvarez"),
+            TestData.Today);
+
+        await using var check = _database.CreateContext();
+        var stored = await check.RentalApplications.FirstAsync(entity => entity.Id == result.Value);
+
+        // Filling the fields is a starting point, not the applicant having agreed to them. Marking
+        // the section saved here would let an application be submitted on details nobody read, and
+        // would carry a stale phone number from the account straight through to a decision.
+        Assert.Null(stored.ApplicantInformationSavedAtUtc);
+    }
+
+    [Fact]
+    public async Task Reopening_an_application_does_not_overwrite_what_was_typed()
+    {
+        await using var db = _database.CreateContext();
+        await TestData.AddAccountAsync(db, TestData.Applicant, "Robin", "Alvarez");
+        var property = await TestData.AddPropertyWithUnitsAsync(db);
+        var unitId = property.Units.First().Id;
+        var service = ServiceOver(db);
+        var actor = new Actor(TestData.Applicant, "Robin Alvarez");
+
+        var first = await service.StartAsync(unitId, actor, TestData.Today);
+
+        var version = (await db.RentalApplications.AsNoTracking()
+            .FirstAsync(entity => entity.Id == first.Value)).ApplicantInformationVersion;
+
+        var saved = await service.SaveApplicantInformationAsync(
+            new ApplicantInformationInput(
+                first.Value, version, "Bobbie", "Alvarez", "555-0199", "bobbie@example.test",
+                "4 Oak Lane", null, "Portland", "OR", "97201"),
+            TestData.Applicant);
+
+        Assert.True(saved.Succeeded);
+
+        // Asking again for the same unit returns the application already in flight rather than
+        // starting a second one, so nothing is refilled over the top of it.
+        var again = await service.StartAsync(unitId, actor, TestData.Today);
+
+        Assert.Equal(first.Value, again.Value);
+
+        await using var check = _database.CreateContext();
+        var stored = await check.RentalApplications.FirstAsync(entity => entity.Id == first.Value);
+
+        Assert.Equal("Bobbie", stored.ApplicantInformation.FirstName);
+        Assert.Equal("bobbie@example.test", stored.ApplicantInformation.Email);
+    }
+
+    [Fact]
+    public async Task Adding_a_residence_leaves_the_sections_token_alone()
+    {
+        await using var db = _database.CreateContext();
+        var property = await TestData.AddPropertyWithUnitsAsync(db);
+        var application = await TestData.AddCompleteDraftAsync(db, property.Units.First().Id);
+        var before = application.ResidenceHistoryVersion;
+
+        var result = await ServiceOver(db).SaveResidenceAsync(
+            new ResidenceInput(
+                0, application.Id, "3 Maple Way", null, "Eugene", "OR", "97401",
+                "Jo Marsh", "555-0122",
+                new DateOnly(2024, 1, 1),
+                new DateOnly(2024, 6, 1)),
+            TestData.Applicant,
+            TestData.Today);
+
+        Assert.True(result.Succeeded);
+
+        await using var check = _database.CreateContext();
+        var stored = await check.RentalApplications.FirstAsync(entity => entity.Id == application.Id);
+
+        // The modal is opened from the page that holds this token. Moving it here would invalidate
+        // that page, and the applicant's own next Continue would come back as somebody else's edit.
+        Assert.Equal(before, stored.ResidenceHistoryVersion);
+    }
+
+    [Fact]
+    public async Task Adding_a_residence_does_not_block_the_next_section_save()
+    {
+        await using var db = _database.CreateContext();
+        var property = await TestData.AddPropertyWithUnitsAsync(db);
+        var application = await TestData.AddCompleteDraftAsync(db, property.Units.First().Id);
+
+        // The token as the page rendering the wizard would have received it.
+        var onThePage = application.ResidenceHistoryVersion;
+        var service = ServiceOver(db);
+
+        await service.SaveResidenceAsync(
+            new ResidenceInput(
+                0, application.Id, "3 Maple Way", null, "Eugene", "OR", "97401",
+                "Jo Marsh", "555-0122",
+                new DateOnly(2024, 1, 1),
+                new DateOnly(2024, 6, 1)),
+            TestData.Applicant,
+            TestData.Today);
+
+        // Exactly what a person does: add a residence in the modal, then press Continue. Nobody
+        // else is involved, so being told to reload and reapply would be a lie.
+        var saved = await service.SaveResidenceHistoryAsync(
+            application.Id,
+            onThePage,
+            TestData.Applicant,
+            requireComplete: true);
+
+        Assert.True(saved.Succeeded, saved.Error);
+    }
+
+    [Fact]
+    public async Task Removing_a_residence_leaves_the_sections_token_alone()
+    {
+        await using var db = _database.CreateContext();
+        var property = await TestData.AddPropertyWithUnitsAsync(db);
+        var application = await TestData.AddCompleteDraftAsync(db, property.Units.First().Id);
+        var residenceId = application.Residences.First().Id;
+        var before = application.ResidenceHistoryVersion;
+
+        var result = await ServiceOver(db).DeleteResidenceAsync(residenceId, TestData.Applicant);
+
+        Assert.True(result.Succeeded);
+
+        await using var check = _database.CreateContext();
+        var stored = await check.RentalApplications.FirstAsync(entity => entity.Id == application.Id);
+
+        Assert.Equal(before, stored.ResidenceHistoryVersion);
+    }
+
+    [Fact]
     public async Task Submitting_moves_the_application_and_records_who_did_it()
     {
         await using var db = _database.CreateContext();
@@ -446,110 +609,5 @@ public class RentalApplicationServiceTests : IDisposable
         Assert.Equal(2, firstPage.PageCount);
         Assert.True(firstPage.HasNext);
         Assert.False(firstPage.HasPrevious);
-    }
-}
-
-/// <summary>
-/// Sorting is part of the list's contract, so it is checked against a real database rather than
-/// assumed: an ordering that does not translate would otherwise only surface at runtime.
-/// </summary>
-public class ApplicationSortingTests : IDisposable
-{
-    private readonly TestDatabase _database = new();
-
-    public void Dispose() => _database.Dispose();
-
-    private RentalApplicationService ServiceOver(Persistence.PropertyManagementDbContext db) =>
-        new(db, new FixedTimeProvider(TestData.Now));
-
-    /// <summary>Two properties, so ordering by property name has something to order.</summary>
-    private async Task SeedAsync(Persistence.PropertyManagementDbContext db)
-    {
-        var first = await TestData.AddPropertyWithUnitsAsync(db);
-
-        var second = new Domain.Entities.Property
-        {
-            Name = "Birch Commons",
-            AddressLine1 = "2 Birch Way",
-            City = "Portland",
-            State = "OR",
-            PostalCode = "97203",
-            Units =
-            [
-                new Domain.Entities.Unit
-                {
-                    UnitNumber = "201",
-                    Bedrooms = 1,
-                    MonthlyRent = 1200m,
-                    UnitTypeId = first.Units.First().UnitTypeId
-                }
-            ]
-        };
-
-        db.Properties.Add(second);
-        await db.SaveChangesAsync();
-
-        var alder = await TestData.AddCompleteDraftAsync(db, first.Units.First().Id);
-        var birch = await TestData.AddCompleteDraftAsync(db, second.Units.First().Id, TestData.OtherApplicant);
-
-        // Give them different names and submission times so every ordering is distinguishable.
-        alder.ApplicantInformation.LastName = "Zeta";
-        birch.ApplicantInformation.LastName = "Alpha";
-        birch.Status = ApplicationStatus.Submitted;
-        birch.SubmittedAtUtc = TestData.Now;
-        alder.SubmittedAtUtc = TestData.Now.AddDays(-5);
-        await db.SaveChangesAsync();
-    }
-
-    [Theory]
-    [InlineData(ApplicationSort.Property, false, "Alder Court")]
-    [InlineData(ApplicationSort.Property, true, "Birch Commons")]
-    [InlineData(ApplicationSort.Unit, false, "Alder Court")]
-    [InlineData(ApplicationSort.Unit, true, "Birch Commons")]
-    [InlineData(ApplicationSort.Applicant, false, "Birch Commons")]
-    [InlineData(ApplicationSort.Applicant, true, "Alder Court")]
-    [InlineData(ApplicationSort.Submitted, true, "Birch Commons")]
-    [InlineData(ApplicationSort.Submitted, false, "Alder Court")]
-    [InlineData(ApplicationSort.Status, false, "Alder Court")]
-    public async Task Each_ordering_puts_the_expected_row_first(
-        ApplicationSort sort,
-        bool descending,
-        string expectedProperty)
-    {
-        await using var db = _database.CreateContext();
-        await SeedAsync(db);
-
-        var page = await ServiceOver(db).ListAsync(
-            new ApplicationListFilter(Sort: sort, Descending: descending),
-            null);
-
-        Assert.Equal(expectedProperty, page.Rows[0].PropertyName);
-    }
-
-    [Fact]
-    public async Task Sorting_and_filtering_combine()
-    {
-        await using var db = _database.CreateContext();
-        await SeedAsync(db);
-
-        var page = await ServiceOver(db).ListAsync(
-            new ApplicationListFilter(Status: ApplicationStatus.Submitted, Sort: ApplicationSort.Property),
-            null);
-
-        Assert.Single(page.Rows);
-        Assert.Equal("Birch Commons", page.Rows[0].PropertyName);
-    }
-
-    [Fact]
-    public async Task An_unrecognised_sort_falls_back_rather_than_throwing()
-    {
-        await using var db = _database.CreateContext();
-        await SeedAsync(db);
-
-        var page = await ServiceOver(db).ListAsync(
-            new ApplicationListFilter(Sort: (ApplicationSort)99),
-            null);
-
-        Assert.Equal(2, page.TotalCount);
     }
 }

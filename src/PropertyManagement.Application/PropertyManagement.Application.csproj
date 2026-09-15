@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The contracts the web layer talks to: one interface per service, plus the records they take and
+    return. It references the domain and nothing else - no Entity Framework, no ASP.NET Core - so a
+    controller or a view model can name what it needs without naming how it is stored.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\PropertyManagement.Domain\PropertyManagement.Domain.csproj" />
+  </ItemGroup>
+
+</Project>

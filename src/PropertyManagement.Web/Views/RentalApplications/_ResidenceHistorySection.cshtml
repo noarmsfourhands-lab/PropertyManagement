@@ -9,7 +9,7 @@
     @if (Model.SectionIsEditable)
     {
         <button type="button" class="btn btn-sm btn-primary"
-                data-modal-url="@Url.Action("ResidenceForm", new { id = 0, applicationId = Model.ApplicationId })">
+                data-modal-url="@Url.Action("Form", "Residences", new { id = 0, applicationId = Model.ApplicationId })">
             Add residence
         </button>
     }

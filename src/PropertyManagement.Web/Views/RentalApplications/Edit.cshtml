@@ -7,7 +7,9 @@
 <nav aria-label="breadcrumb">
     <ol class="breadcrumb">
         <li class="breadcrumb-item"><a asp-action="Index">Applications</a></li>
-        <li class="breadcrumb-item active" aria-current="page">Application @Model.ApplicationId</li>
+        @* The unit, not the row number. An application's database id means nothing to the person
+           reading it, and the breadcrumb beside this one already names its property the same way. *@
+        <li class="breadcrumb-item active" aria-current="page">Unit @Model.Unit.UnitNumber</li>
     </ol>
 </nav>
 
@@ -20,7 +22,7 @@
         </p>
     </div>
     <div class="text-end">
-        <span class="badge @ApplicationListViewModel.BadgeClassFor(Model.Status) fs-6">
+        <span class="@ApplicationListViewModel.BadgeClassFor(Model.Status) fs-6">
             @ApplicationListViewModel.DisplayNameFor(Model.Status)
         </span>
     </div>

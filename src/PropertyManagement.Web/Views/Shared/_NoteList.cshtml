@@ -21,10 +21,10 @@ else
                     @* Preserves the line breaks the author typed without treating the text as markup. *@
                     <p class="mb-1" style="white-space: pre-wrap">@note.Body</p>
                     <div class="small text-muted">
-                        @note.AuthorName &middot; @note.CreatedAtUtc.ToLocalTime().ToString("d MMM yyyy, HH:mm")
+                        @note.AuthorName &middot; @TimeDisplay.Moment(note.CreatedAtUtc)
                         @if (note.UpdatedAtUtc is not null)
                         {
-                            <text>&middot; edited @note.UpdatedAtUtc.Value.ToLocalTime().ToString("d MMM yyyy, HH:mm")</text>
+                            <text>&middot; edited @TimeDisplay.Moment(note.UpdatedAtUtc.Value)</text>
                         }
                     </div>
                 </div>

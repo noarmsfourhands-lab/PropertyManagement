@@ -71,7 +71,11 @@ public class AccountController(
             return RedirectToAction("Index", "Home");
         }
 
-        return View(new RegisterViewModel { ReturnUrl = returnUrl });
+        return View(new RegisterViewModel
+        {
+            ReturnUrl = returnUrl,
+            PasswordRule = PasswordRule()
+        });
     }
 
     [HttpPost]
@@ -85,6 +89,8 @@ public class AccountController(
         {
             ModelState.AddModelError(nameof(model.Role), "Choose one of the available roles.");
         }
+
+        model.PasswordRule = PasswordRule();
 
         if (!ModelState.IsValid)
         {
@@ -105,24 +111,58 @@ public class AccountController(
 
         if (!created.Succeeded)
         {
-            foreach (var error in created.Errors)
-            {
-                ModelState.AddModelError(string.Empty, error.Description);
-            }
-
+            ReportSignUpFailure(created);
             return View(model);
         }
 
-        await userManager.AddToRoleAsync(user, model.Role);
+        var assigned = await userManager.AddToRoleAsync(user, model.Role);
+
+        if (!assigned.Succeeded)
+        {
+            // The account exists but has no role, so it would be refused on every page it opened.
+            // Undo it rather than leave someone signed in to nothing.
+            logger.LogError(
+                "Created {Email} but could not put them in {Role}: {Errors}",
+                model.Email,
+                model.Role,
+                string.Join("; ", assigned.Errors.Select(error => error.Description)));
+
+            await userManager.DeleteAsync(user);
+
+            ModelState.AddModelError(string.Empty, "That account could not be set up. Try again.");
+            return View(model);
+        }
+
         await signInManager.SignInAsync(user, isPersistent: false);
 
         logger.LogInformation("{Email} signed up as {Role}.", model.Email, model.Role);
         return RedirectToLocal(model.ReturnUrl);
     }
 
+    /// <summary>
+    /// Asks before signing out, for anyone who reaches this address directly.
+    ///
+    /// Signing out has to be a POST: a GET that ends the session can be fired by a link in an
+    /// email, an image tag on another site, or a browser prefetching what it thinks is a page.
+    /// That leaves the address itself with nothing to answer, which is a "method not allowed" for
+    /// a URL people can perfectly reasonably type or bookmark. So the GET is a real page that asks,
+    /// and the button on it posts.
+    /// </summary>
+    [HttpGet]
+    [AllowAnonymous]
+    public IActionResult Logout()
+    {
+        // Already signed out: there is nothing to confirm, so say so rather than offering a button
+        // that would do nothing.
+        return User.Identity?.IsAuthenticated == true
+            ? View()
+            : RedirectToAction(nameof(Login));
+    }
+
     [HttpPost]
+    [ActionName(nameof(Logout))]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Logout()
+    public async Task<IActionResult> LogoutConfirmed()
     {
         await signInManager.SignOutAsync();
         return RedirectToAction(nameof(Login));
@@ -131,6 +171,90 @@ public class AccountController(
     [HttpGet]
     [AllowAnonymous]
     public IActionResult AccessDenied() => View();
+
+    /// <summary>
+    /// The password rule as a sentence, read from the configuration that enforces it so the two
+    /// cannot drift apart.
+    /// </summary>
+    private string PasswordRule()
+    {
+        var rules = userManager.Options.Password;
+        var needs = new List<string>();
+
+        if (rules.RequireUppercase)
+        {
+            needs.Add("an uppercase letter");
+        }
+
+        if (rules.RequireLowercase)
+        {
+            needs.Add("a lowercase letter");
+        }
+
+        if (rules.RequireDigit)
+        {
+            needs.Add("a number");
+        }
+
+        if (rules.RequireNonAlphanumeric)
+        {
+            needs.Add("a symbol");
+        }
+
+        var length = $"Use at least {rules.RequiredLength} characters";
+
+        return needs.Count == 0
+            ? $"{length}."
+            : $"{length}, including {string.Join(", ", needs[..^1])}"
+              + (needs.Count > 1 ? " and " : " ")
+              + $"{needs[^1]}.";
+    }
+
+    /// <summary>
+    /// Puts an Identity failure on the form in the words of this application.
+    ///
+    /// Identity reports what its own model thinks, which is not what the person filled in. The
+    /// account's username is their email address here, so a duplicate address comes back twice, as
+    /// a taken username and a taken email: one fact, stated twice, half of it about a field this
+    /// form does not have. Password rules come back as one error per rule for the same box.
+    ///
+    /// So each error is placed on the field it belongs to and the duplicates collapse.
+    /// </summary>
+    private void ReportSignUpFailure(IdentityResult result)
+    {
+        var reported = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var error in result.Errors)
+        {
+            var (field, message) = error.Code switch
+            {
+                // Both of these mean the same thing, because the username is the email address.
+                "DuplicateUserName" or "DuplicateEmail" => (
+                    nameof(RegisterViewModel.Email),
+                    "An account already exists for that email address. Sign in instead."),
+
+                "InvalidEmail" or "InvalidUserName" => (
+                    nameof(RegisterViewModel.Email),
+                    "That does not look like an email address."),
+
+                // Identity raises one of these per unmet rule, and the field renders only the
+                // first, so reporting them separately corrects the person once per attempt. The
+                // whole rule is one message.
+                var code when code.StartsWith("Password", StringComparison.Ordinal) => (
+                    nameof(RegisterViewModel.Password),
+                    PasswordRule()),
+
+                _ => (string.Empty, error.Description)
+            };
+
+            // Identity can report the same conclusion under more than one code, and a field should
+            // never be told the same thing twice.
+            if (reported.Add($"{field}|{message}"))
+            {
+                ModelState.AddModelError(field, message);
+            }
+        }
+    }
 
     /// <summary>
     /// Only ever redirects inside this application. An open redirect would let a crafted link

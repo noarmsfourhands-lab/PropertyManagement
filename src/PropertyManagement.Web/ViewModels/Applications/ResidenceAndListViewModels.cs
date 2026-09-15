@@ -2,7 +2,7 @@ using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using PropertyManagement.Domain.Entities;
 using PropertyManagement.Domain.Enums;
-using PropertyManagement.Infrastructure.Services;
+using PropertyManagement.Application.Services;
 using PropertyManagement.Web.ViewComponents;
 
 namespace PropertyManagement.Web.ViewModels.Applications;
@@ -147,7 +147,12 @@ public class ApplicationListViewModel
                 Sort: nameof(ApplicationSort.Status),
                 Render: DataGridRender.Badge,
                 ClassField: "StatusClass"),
-            new DataGridColumn("Submitted", "Submitted", Sort: nameof(ApplicationSort.Submitted)),
+            new DataGridColumn(
+                "Submitted",
+                "Submitted",
+                Sort: nameof(ApplicationSort.Submitted),
+                Render: DataGridRender.Date,
+                EmptyText: "Not submitted"),
             new DataGridColumn(
                 "DetailUrl",
                 string.Empty,
@@ -190,16 +195,22 @@ public class ApplicationListViewModel
         _ => status.ToString()
     };
 
-    /// <summary>The Bootstrap contextual class each status is rendered with.</summary>
+    /// <summary>
+    /// The class each status is drawn with.
+    ///
+    /// These are the application's own, not Bootstrap's semantic set. A status is not a severity:
+    /// Submitted is not information and Returned is not a warning, so borrowing those colours
+    /// would say something the domain does not mean, and would fight the brand palette besides.
+    /// </summary>
     public static string BadgeClassFor(ApplicationStatus status) => status switch
     {
-        ApplicationStatus.Draft => "text-bg-secondary",
-        ApplicationStatus.Submitted => "text-bg-primary",
-        ApplicationStatus.UnderReview => "text-bg-info",
-        ApplicationStatus.Returned => "text-bg-warning",
-        ApplicationStatus.Approved => "text-bg-success",
-        ApplicationStatus.Denied => "text-bg-danger",
-        ApplicationStatus.Withdrawn => "text-bg-dark",
-        _ => "text-bg-secondary"
+        ApplicationStatus.Draft => "status status-draft",
+        ApplicationStatus.Submitted => "status status-submitted",
+        ApplicationStatus.UnderReview => "status status-review",
+        ApplicationStatus.Returned => "status status-returned",
+        ApplicationStatus.Approved => "status status-approved",
+        ApplicationStatus.Denied => "status status-denied",
+        ApplicationStatus.Withdrawn => "status status-withdrawn",
+        _ => "status status-draft"
     };
 }

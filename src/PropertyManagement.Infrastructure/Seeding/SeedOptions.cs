@@ -8,8 +8,12 @@ public class SeedOptions
 {
     public const string SectionName = "Seeding";
 
-    /// <summary>Turn seeding off entirely, for example in a real deployment.</summary>
-    public bool Enabled { get; set; } = true;
+    /// <summary>
+    /// Whether to write the demo data. Off unless something turns it on, because the safe default
+    /// for a switch that invents tenants and signs them up is the one that does nothing. It is
+    /// enabled in appsettings.Development.json, so running locally still gets a full database.
+    /// </summary>
+    public bool Enabled { get; set; }
 
     /// <summary>
     /// Fixes the Bogus randomiser so every run of a fresh database produces the same names,

@@ -20,6 +20,10 @@ public class LeaseConfiguration : IEntityTypeConfiguration<Lease>
         builder.Property(lease => lease.EndDate).IsRequired();
         builder.Property(lease => lease.MonthlyRent).HasPrecision(18, 2).IsRequired();
 
+        // Copied at issue, for the same reason the rent is. See the note on the entity.
+        builder.Property(lease => lease.PropertyName).IsRequired().HasMaxLength(200);
+        builder.Property(lease => lease.UnitNumber).IsRequired().HasMaxLength(20);
+
 
         // Two jobs at once. Availability is answered by "does any lease for this unit cover
         // today", so the index leads with the unit and carries the start of the term. Unique,

@@ -13,7 +13,13 @@ public enum DataGridRender
     Badge = 1,
 
     /// <summary>A link, whose href is the field's value and whose text is <see cref="DataGridColumn.LinkText"/>.</summary>
-    Link = 2
+    Link = 2,
+
+    /// <summary>
+    /// An instant, sent as ISO-8601 and formatted in the reader's own locale and timezone. The
+    /// server cannot know either, so it must not be the one to format it.
+    /// </summary>
+    Date = 3
 }
 
 public enum DataGridAlign
@@ -33,6 +39,7 @@ public enum DataGridAlign
 /// <param name="Align">Which edge to align to.</param>
 /// <param name="ClassField">For a badge, the row property holding its contextual class.</param>
 /// <param name="LinkText">For a link, the text to show.</param>
+/// <param name="EmptyText">What to show when the value is absent.</param>
 public record DataGridColumn(
     string Field,
     string Header,
@@ -40,7 +47,8 @@ public record DataGridColumn(
     DataGridRender Render = DataGridRender.Text,
     DataGridAlign Align = DataGridAlign.Start,
     string? ClassField = null,
-    string? LinkText = null)
+    string? LinkText = null,
+    string? EmptyText = null)
 {
     public bool Sortable => !string.IsNullOrWhiteSpace(Sort);
 }

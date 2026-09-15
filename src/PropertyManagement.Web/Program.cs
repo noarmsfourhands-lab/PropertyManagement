@@ -1,12 +1,22 @@
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Mvc.Authorization;
 using Microsoft.Data.SqlClient;
 using PropertyManagement.Domain.Enums;
-using PropertyManagement.Infrastructure;
 using PropertyManagement.Infrastructure.Seeding;
+using PropertyManagement.Infrastructure;
+using PropertyManagement.Web;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddInfrastructure(builder.Configuration);
+
+// Shared by the view component that renders the applicants region and the controller that
+// re-renders it, so the rule about who may see and change it is written once.
+builder.Services.AddScoped<ApplicantListFactory>();
+
+// Shared by the wizard and the residence modal, which are separate controllers over the same
+// application and must answer "may this person see it, may they change it" the same way.
+builder.Services.AddScoped<ApplicationContextFactory>();
 
 builder.Services.AddAuthorization(options =>
 {
@@ -64,6 +74,21 @@ builder.Services.ConfigureApplicationCookie(options =>
     };
 });
 
+// Data Protection encrypts the authentication cookie and the antiforgery token. Left alone it
+// writes its keys wherever the host suggests, which inside a container is the container's own
+// filesystem: every restart issues a fresh key and signs everyone out, and a second replica cannot
+// read the first one's cookies at all. Pointing it at a mounted directory fixes both. Unset, the
+// default still applies, so nothing changes for someone running this from Visual Studio.
+var keyPath = builder.Configuration["DataProtection:KeyPath"];
+
+if (!string.IsNullOrWhiteSpace(keyPath))
+{
+    builder.Services
+        .AddDataProtection()
+        .SetApplicationName("PropertyManagement")
+        .PersistKeysToFileSystem(new DirectoryInfo(keyPath));
+}
+
 var app = builder.Build();
 
 // Create the database, apply migrations and seed before the first request is served.
@@ -76,7 +101,20 @@ await using (var scope = app.Services.CreateAsyncScope())
     try
     {
         var seeder = scope.ServiceProvider.GetRequiredService<DatabaseSeeder>();
-        await seeder.SeedAsync();
+
+        // Migrating from the web process is convenient for a single instance and wrong for several:
+        // every replica racing the same migration is a known way to corrupt a deployment. The
+        // switch lets a real deployment run migrations as its own step and start the app with this
+        // off, and it is what the integration tests use to boot against a schema they built
+        // themselves. It defaults on, so nothing changes for someone cloning this and pressing F5.
+        if (builder.Configuration.GetValue("Database:MigrateOnStartup", defaultValue: true))
+        {
+            await seeder.SeedAsync();
+        }
+        else
+        {
+            await seeder.SeedDataAsync();
+        }
     }
     catch (SqlException exception)
     {
@@ -117,10 +155,9 @@ app.MapControllerRoute(
 
 app.Run();
 
-/// <summary>Policy names used by the controllers.</summary>
-public static class AuthorizationPolicies
-{
-    public const string PropertyManager = nameof(PropertyManager);
-
-    public const string Applicant = nameof(Applicant);
-}
+/// <summary>
+/// Named so the integration tests can boot this exact pipeline through WebApplicationFactory.
+/// Top-level statements otherwise generate an internal Program that a test project cannot see,
+/// and a test host built from a hand-written copy of the wiring would not be testing this app.
+/// </summary>
+public partial class Program;

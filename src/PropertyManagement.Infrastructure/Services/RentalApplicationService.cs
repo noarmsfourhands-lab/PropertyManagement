@@ -1,128 +1,13 @@
-using System.Linq.Expressions;
 using Microsoft.EntityFrameworkCore;
+using PropertyManagement.Application.Services;
 using PropertyManagement.Domain.Common;
 using PropertyManagement.Domain.Entities;
 using PropertyManagement.Domain.Enums;
 using PropertyManagement.Domain.Rules;
 using PropertyManagement.Infrastructure.Persistence;
+using System.Linq.Expressions;
 
 namespace PropertyManagement.Infrastructure.Services;
-
-/// <summary>Who is performing an action. The name is copied onto audit entries as they are written.</summary>
-public record Actor(string UserId, string Name);
-
-/// <summary>Section one, as posted. <paramref name="Version"/> is the token the page was rendered with.</summary>
-public record ApplicantInformationInput(
-    int ApplicationId,
-    Guid Version,
-    string? FirstName,
-    string? LastName,
-    string? Phone,
-    string? Email,
-    string? AddressLine1,
-    string? AddressLine2,
-    string? City,
-    string? State,
-    string? PostalCode);
-
-/// <summary>One residence, as posted from the modal. Id is zero when adding.</summary>
-public record ResidenceInput(
-    int Id,
-    int ApplicationId,
-    string AddressLine1,
-    string? AddressLine2,
-    string City,
-    string State,
-    string PostalCode,
-    string LandlordName,
-    string LandlordPhone,
-    DateOnly MoveInDate,
-    DateOnly? MoveOutDate);
-
-/// <summary>
-/// The columns the list can be ordered by. An enum rather than a column name from the request, so
-/// the sort can never become a way to inject a fragment of SQL or to order by something private.
-/// </summary>
-public enum ApplicationSort
-{
-    Submitted = 0,
-    Status = 1,
-    Property = 2,
-    Unit = 3,
-    Applicant = 4
-}
-
-/// <summary>What the list is filtered, sorted and paged by. Both filters are optional.</summary>
-public record ApplicationListFilter(
-    ApplicationStatus? Status = null,
-    int? PropertyId = null,
-    int Page = 1,
-    int PageSize = 20,
-    ApplicationSort Sort = ApplicationSort.Submitted,
-    bool Descending = true);
-
-/// <summary>One row of the list. Projected in the database; no entity graph is loaded.</summary>
-public record ApplicationListRow(
-    int Id,
-    string PropertyName,
-    string UnitNumber,
-    string ApplicantName,
-    ApplicationStatus Status,
-    DateTime CreatedAtUtc,
-    DateTime? SubmittedAtUtc);
-
-public record ApplicationListPage(
-    IReadOnlyList<ApplicationListRow> Rows,
-    int TotalCount,
-    int Page,
-    int PageSize)
-{
-    public int PageCount => PageSize <= 0 ? 0 : (int)Math.Ceiling(TotalCount / (double)PageSize);
-
-    public bool HasPrevious => Page > 1;
-
-    public bool HasNext => Page < PageCount;
-}
-
-public interface IRentalApplicationService
-{
-    Task<RentalApplication?> GetAsync(int id, CancellationToken cancellationToken = default);
-
-    Task<bool> IsApplicantOnAsync(int applicationId, string userId, CancellationToken cancellationToken = default);
-
-    Task<DomainResult<int>> StartAsync(int unitId, Actor actor, DateOnly asOf, CancellationToken cancellationToken = default);
-
-    Task<DomainResult> SaveApplicantInformationAsync(
-        ApplicantInformationInput input,
-        string userId,
-        CancellationToken cancellationToken = default);
-
-    Task<DomainResult> SaveResidenceHistoryAsync(
-        int applicationId,
-        Guid version,
-        string userId,
-        bool requireComplete = true,
-        CancellationToken cancellationToken = default);
-
-    Task<DomainResult> SaveResidenceAsync(
-        ResidenceInput input,
-        string userId,
-        DateOnly asOf,
-        CancellationToken cancellationToken = default);
-
-    Task<DomainResult> DeleteResidenceAsync(int residenceId, string userId, CancellationToken cancellationToken = default);
-
-    Task<DomainResult> SubmitAsync(int applicationId, Actor actor, DateOnly asOf, CancellationToken cancellationToken = default);
-
-    Task<DomainResult> WithdrawAsync(int applicationId, Actor actor, CancellationToken cancellationToken = default);
-
-    Task<ApplicationListPage> ListAsync(
-        ApplicationListFilter filter,
-        string? applicantUserId,
-        CancellationToken cancellationToken = default);
-
-    Task<IReadOnlyList<Property>> GetFilterPropertiesAsync(CancellationToken cancellationToken = default);
-}
 
 /// <summary>
 /// Everything an applicant does to an application. The guards in
@@ -158,6 +43,19 @@ public class RentalApplicationService(PropertyManagementDbContext db, TimeProvid
             .AsSplitQuery()
             .FirstOrDefaultAsync(application => application.Id == id, cancellationToken);
 
+    public async Task<ApplicationAccess?> GetAccessAsync(
+        int applicationId,
+        string userId,
+        CancellationToken cancellationToken = default) =>
+        await db.RentalApplications
+            .AsNoTracking()
+            .Where(application => application.Id == applicationId)
+            .Select(application => new ApplicationAccess(
+                application.Id,
+                application.Status,
+                application.Applicants.Any(link => link.ApplicantUserId == userId)))
+            .FirstOrDefaultAsync(cancellationToken);
+
     /// <summary>
     /// Ownership is a set rather than a single column, so an application shared between applicants
     /// answers this for every one of them.
@@ -184,6 +82,8 @@ public class RentalApplicationService(PropertyManagementDbContext db, TimeProvid
 
         var unit = await db.Units
             .Include(entity => entity.Leases)
+            // The property name is copied onto the application, so it has to be loaded to copy.
+            .Include(entity => entity.Property)
             .FirstOrDefaultAsync(entity => entity.Id == unitId, cancellationToken);
 
         if (unit is null)
@@ -213,11 +113,42 @@ public class RentalApplicationService(PropertyManagementDbContext db, TimeProvid
 
         var now = timeProvider.GetUtcNow().UtcDateTime;
 
+        // The account already knows who this person is, so the first section opens filled in rather
+        // than asking them to type their own name again. Only what the account actually holds: it
+        // has no address, so those fields stay empty for them to complete.
+        //
+        // It is a starting point, not an answer. ApplicantInformationSavedAtUtc stays null, so the
+        // applicant still has to look the section over and save it before the application can be
+        // submitted, and a stale phone number on the account cannot ride through unnoticed.
+        var account = await db.Users
+            .AsNoTracking()
+            .Where(user => user.Id == actor.UserId)
+            .Select(user => new
+            {
+                user.FirstName,
+                user.LastName,
+                user.Email,
+                user.PhoneNumber
+            })
+            .FirstOrDefaultAsync(cancellationToken);
+
         var application = new RentalApplication
         {
             UnitId = unitId,
             Status = ApplicationStatus.Draft,
             CreatedAtUtc = now,
+
+            // What was applied for, as it was named at the time. Lists and past decisions read
+            // these rather than the unit, so renaming a property does not rewrite history.
+            PropertyName = unit.Property?.Name ?? string.Empty,
+            UnitNumber = unit.UnitNumber,
+            ApplicantInformation = new ApplicantInformation
+            {
+                FirstName = Clean(account?.FirstName),
+                LastName = Clean(account?.LastName),
+                Email = Clean(account?.Email),
+                Phone = Clean(account?.PhoneNumber)
+            },
             Applicants =
             [
                 new RentalApplicationApplicant
@@ -393,7 +324,13 @@ public class RentalApplicationService(PropertyManagementDbContext db, TimeProvid
         residence.MoveInDate = input.MoveInDate;
         residence.MoveOutDate = input.MoveOutDate;
 
+        // Deliberately does not touch ResidenceHistoryVersion. That token guards the section save,
+        // which writes a completion marker and nothing else; the rows are written here, one request
+        // at a time, each against current storage. Moving it from here would invalidate the token
+        // held by the page this modal was opened from, so the applicant's own next Continue would
+        // be refused as somebody else's edit. See the note on the entity.
         await db.SaveChangesAsync(cancellationToken);
+
         return DomainResult.Success();
     }
 
@@ -421,6 +358,8 @@ public class RentalApplicationService(PropertyManagementDbContext db, TimeProvid
         }
 
         db.Residences.Remove(residence);
+
+        // As with saving a row, the section's token is left alone.
         await db.SaveChangesAsync(cancellationToken);
 
         return DomainResult.Success();
@@ -570,10 +509,13 @@ public class RentalApplicationService(PropertyManagementDbContext db, TimeProvid
             .ThenByDescending(application => application.Id)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
+            // The names the application recorded, not the unit's current ones. This list includes
+            // approved, denied and withdrawn rows, and a record of something that already happened
+            // should not change because a property was renamed afterwards.
             .Select(application => new ApplicationListRow(
                 application.Id,
-                application.Unit.Property.Name,
-                application.Unit.UnitNumber,
+                application.PropertyName,
+                application.UnitNumber,
                 ((application.ApplicantInformation.FirstName ?? string.Empty)
                     + " "
                     + (application.ApplicantInformation.LastName ?? string.Empty)).Trim(),
@@ -631,6 +573,26 @@ public class RentalApplicationService(PropertyManagementDbContext db, TimeProvid
         string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
     /// <summary>
+    /// Saves, and turns a lost race into a message rather than a 500.
+    ///
+    /// Moving a concurrency token means the update can now match no rows, which EF reports by
+    /// throwing. Every caller that moves one needs this, and the person on the other end needs to
+    /// be told to reload rather than shown a stack trace.
+    /// </summary>
+    private async Task<DomainResult> SaveOrReportStaleAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await db.SaveChangesAsync(cancellationToken);
+            return DomainResult.Success();
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return DomainResult.Failure(StaleSaveMessage);
+        }
+    }
+
+    /// <summary>
     /// Saves a section under its own concurrency token. Telling EF the original value puts it in
     /// the update's WHERE clause, so a save built on a stale copy of that section changes nothing
     /// and is reported rather than silently overwriting the other person's work. The other
@@ -646,14 +608,6 @@ public class RentalApplicationService(PropertyManagementDbContext db, TimeProvid
         property.OriginalValue = expectedVersion;
         property.CurrentValue = Guid.NewGuid();
 
-        try
-        {
-            await db.SaveChangesAsync(cancellationToken);
-            return DomainResult.Success();
-        }
-        catch (DbUpdateConcurrencyException)
-        {
-            return DomainResult.Failure(StaleSaveMessage);
-        }
+        return await SaveOrReportStaleAsync(cancellationToken);
     }
 }

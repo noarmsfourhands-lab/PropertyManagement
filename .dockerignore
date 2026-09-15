@@ -1,0 +1,12 @@
+# Keeps the build context small and stops host build output leaking into the image.
+**/bin/
+**/obj/
+.git/
+.github/
+.vs/
+.vscode/
+*.user
+*.md
+Dockerfile
+.dockerignore
+compose.yaml

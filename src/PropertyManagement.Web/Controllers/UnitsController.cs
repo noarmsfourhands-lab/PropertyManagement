@@ -1,5 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
-using PropertyManagement.Infrastructure.Services;
+using PropertyManagement.Application.Services;
 using PropertyManagement.Web.ViewModels.Properties;
 
 namespace PropertyManagement.Web.Controllers;

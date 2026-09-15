@@ -1,11 +1,11 @@
 @model PropertyManagement.Domain.Entities.Residence
 
-<form asp-action="DeleteResidence" asp-route-id="@Model.Id"
+<form asp-action="Delete" asp-controller="Residences" asp-route-id="@Model.Id"
       asp-route-applicationId="@Model.RentalApplicationId" method="post"
       data-modal-form
       data-refresh-target="#residence-list"
       data-clears="[data-clear-on-success]"
-      data-refresh-url="@Url.Action("ResidenceListPartial", new { id = Model.RentalApplicationId })">
+      data-refresh-url="@Url.Action("ListPartial", "Residences", new { id = Model.RentalApplicationId })">
     @Html.AntiForgeryToken()
 
     <div class="modal-header">

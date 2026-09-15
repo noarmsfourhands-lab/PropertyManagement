@@ -96,6 +96,28 @@
             window.history.replaceState(null, '', visible.toString());
         }
 
+        /* The chips this grid may draw. The set matches the .status rules in site.css; a value
+           outside it is a bug or tampering, and either way the neutral chip is the right answer. */
+        var STATUS_CLASSES = [
+            'status status-draft', 'status status-submitted', 'status status-review',
+            'status status-returned', 'status status-approved', 'status status-denied',
+            'status status-withdrawn'
+        ];
+
+        function statusClass(value) {
+            return STATUS_CLASSES.indexOf(value) === -1 ? 'status status-draft' : value;
+        }
+
+        /* A same-site path: one leading slash and not two, which would be a protocol-relative URL
+           pointing at another host. Absolute URLs are refused rather than compared against the
+           current origin, because this grid never has a reason to link off-site. */
+        function isLocalPath(value) {
+            return typeof value === 'string'
+                && value.charAt(0) === '/'
+                && value.charAt(1) !== '/'
+                && value.charAt(1) !== '\\';
+        }
+
         function cell(column, row) {
             var td = document.createElement('td');
 
@@ -109,16 +131,38 @@
                 value = '';
             }
 
+            if (column.render === 'Date') {
+                if (value) {
+                    var when = new Date(value);
+                    td.textContent = isNaN(when.getTime())
+                        ? value
+                        : new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(when);
+                } else {
+                    td.textContent = column.emptyText || '';
+                }
+                return td;
+            }
+
             if (column.render === 'Badge') {
                 var badge = document.createElement('span');
-                badge.className = 'badge ' + (row[column.classField] || 'text-bg-secondary');
+                /* The endpoint names the chip's class so the grid stays ignorant of what the
+                   value means and of which design system is drawing it. It is still checked here:
+                   a class attribute taken verbatim from a response lets whoever controls that
+                   response restyle the page, and the grid cannot know the response was untampered
+                   with. Only this application's own status palette is accepted. Bootstrap's bare
+                   .badge is not the fallback: it sets a colour but no background, so it would draw
+                   white on white. */
+                badge.className = statusClass(row[column.classField]);
                 badge.textContent = value;
                 td.appendChild(badge);
                 return td;
             }
 
             if (column.render === 'Link') {
-                if (value) {
+                /* Only a path within this site. Assigning an unchecked value to href would let a
+                   response turn a row's Open button into javascript: or point it somewhere else,
+                   which is the whole of that attack. */
+                if (value && isLocalPath(value)) {
                     var link = document.createElement('a');
                     link.className = 'btn btn-sm btn-outline-secondary';
                     link.href = value;

@@ -17,7 +17,8 @@
             classField = column.ClassField is null
                 ? null
                 : JsonNamingPolicy.CamelCase.ConvertName(column.ClassField),
-            linkText = column.LinkText
+            linkText = column.LinkText,
+            emptyText = column.EmptyText
         }),
         new JsonSerializerOptions { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull });
 }

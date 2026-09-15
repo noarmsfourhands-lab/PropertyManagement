@@ -1,25 +1,10 @@
 using Microsoft.EntityFrameworkCore;
+using PropertyManagement.Application.Services;
 using PropertyManagement.Domain.Common;
 using PropertyManagement.Domain.Entities;
 using PropertyManagement.Infrastructure.Persistence;
 
 namespace PropertyManagement.Infrastructure.Services;
-
-/// <summary>A note as posted from the modal. Id is zero when adding.</summary>
-public record NoteInput(int Id, int ApplicationId, string Body);
-
-public interface INoteService
-{
-    Task<IReadOnlyList<PropertyManagerNote>> GetNotesAsync(
-        int applicationId,
-        CancellationToken cancellationToken = default);
-
-    Task<PropertyManagerNote?> GetNoteAsync(int noteId, CancellationToken cancellationToken = default);
-
-    Task<DomainResult> SaveNoteAsync(NoteInput input, Actor actor, CancellationToken cancellationToken = default);
-
-    Task<DomainResult> DeleteNoteAsync(int noteId, CancellationToken cancellationToken = default);
-}
 
 /// <summary>
 /// Internal notes a property manager keeps against an application.
@@ -30,8 +15,8 @@ public interface INoteService
 /// or endpoint projects the type at all. A note therefore cannot leak by someone forgetting a
 /// guard on a new page.
 ///
-/// Any property manager may edit any note, as the requirement describes; the author and the time
-/// of the last edit are both recorded so the history of a note is still legible.
+/// Any property manager may edit any note; the author and the time of the last edit are both
+/// recorded, so the history of a note stays legible.
 /// </summary>
 public class NoteService(PropertyManagementDbContext db, TimeProvider timeProvider) : INoteService
 {

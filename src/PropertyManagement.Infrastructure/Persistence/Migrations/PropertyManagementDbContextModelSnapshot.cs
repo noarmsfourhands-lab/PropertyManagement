@@ -194,6 +194,10 @@ namespace PropertyManagement.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("OccurredAtUtc")
+                        .HasDatabaseName("IX_ApplicationEvents_Decisions")
+                        .HasFilter("[Outcome] IS NOT NULL");
+
                     b.HasIndex("RentalApplicationId", "OccurredAtUtc");
 
                     b.ToTable("ApplicationEvents", (string)null);
@@ -214,6 +218,11 @@ namespace PropertyManagement.Infrastructure.Persistence.Migrations
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<string>("PropertyName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
                     b.Property<int>("RentalApplicationId")
                         .HasColumnType("int");
 
@@ -222,6 +231,11 @@ namespace PropertyManagement.Infrastructure.Persistence.Migrations
 
                     b.Property<int>("UnitId")
                         .HasColumnType("int");
+
+                    b.Property<string>("UnitNumber")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
 
                     b.HasKey("Id");
 
@@ -345,6 +359,11 @@ namespace PropertyManagement.Infrastructure.Persistence.Migrations
                     b.Property<DateTime?>("DecidedAtUtc")
                         .HasColumnType("datetime2");
 
+                    b.Property<string>("PropertyName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
                     b.Property<DateTime?>("ResidenceHistorySavedAtUtc")
                         .HasColumnType("datetime2");
 
@@ -361,13 +380,23 @@ namespace PropertyManagement.Infrastructure.Persistence.Migrations
                     b.Property<int>("UnitId")
                         .HasColumnType("int");
 
+                    b.Property<string>("UnitNumber")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
                     b.HasKey("Id");
+
+                    b.HasIndex("ClaimedByUserId");
 
                     b.HasIndex("Status");
 
                     b.HasIndex("UnitId", "Status");
 
-                    b.ToTable("RentalApplications", (string)null);
+                    b.ToTable("RentalApplications", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_RentalApplications_SubmittedHasApplicantInformation", "[Status] NOT IN (1, 2, 4, 5)\nOR ([ApplicantFirstName] IS NOT NULL\n    AND [ApplicantLastName] IS NOT NULL\n    AND [ApplicantPhone] IS NOT NULL\n    AND [ApplicantEmail] IS NOT NULL\n    AND [ApplicantAddressLine1] IS NOT NULL\n    AND [ApplicantCity] IS NOT NULL\n    AND [ApplicantState] IS NOT NULL\n    AND [ApplicantPostalCode] IS NOT NULL)");
+                        });
                 });
 
             modelBuilder.Entity("PropertyManagement.Domain.Entities.RentalApplicationApplicant", b =>
@@ -641,7 +670,7 @@ namespace PropertyManagement.Infrastructure.Persistence.Migrations
                     b.HasOne("PropertyManagement.Domain.Entities.RentalApplication", "RentalApplication")
                         .WithMany("Events")
                         .HasForeignKey("RentalApplicationId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.Navigation("RentalApplication");
@@ -671,7 +700,7 @@ namespace PropertyManagement.Infrastructure.Persistence.Migrations
                     b.HasOne("PropertyManagement.Domain.Entities.RentalApplication", "RentalApplication")
                         .WithMany("Notes")
                         .HasForeignKey("RentalApplicationId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.Navigation("RentalApplication");
@@ -679,6 +708,11 @@ namespace PropertyManagement.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("PropertyManagement.Domain.Entities.RentalApplication", b =>
                 {
+                    b.HasOne("PropertyManagement.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("ClaimedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("PropertyManagement.Domain.Entities.Unit", "Unit")
                         .WithMany("Applications")
                         .HasForeignKey("UnitId")
@@ -751,6 +785,12 @@ namespace PropertyManagement.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("PropertyManagement.Domain.Entities.RentalApplicationApplicant", b =>
                 {
+                    b.HasOne("PropertyManagement.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("ApplicantUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.HasOne("PropertyManagement.Domain.Entities.RentalApplication", "RentalApplication")
                         .WithMany("Applicants")
                         .HasForeignKey("RentalApplicationId")

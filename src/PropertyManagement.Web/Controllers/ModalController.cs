@@ -38,4 +38,16 @@ public abstract class ModalController : Controller
     /// </summary>
     protected void AddError(string? key, string message) =>
         ModelState.AddModelError(key ?? string.Empty, message);
+
+    /// <summary>
+    /// The answer for a record this user may not view: indistinguishable from one that does not
+    /// exist. Returning 403 for a record that exists and 404 for one that does not lets anyone walk
+    /// the ids and learn how many there are and which numbers are real, which is worth more to an
+    /// attacker than the precision is worth to someone who should not be there at all.
+    ///
+    /// It lives here so every controller reaches for the same word. Where the user may view the
+    /// record but not perform the action, the answer is still 403: they already know it exists,
+    /// and "not found" would only be confusing.
+    /// </summary>
+    protected IActionResult Hidden() => NotFound();
 }

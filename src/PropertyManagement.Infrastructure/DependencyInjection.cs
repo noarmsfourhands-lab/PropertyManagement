@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Identity;
+using PropertyManagement.Application.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -28,7 +29,18 @@ public static class DependencyInjection
 
         services.AddDbContext<PropertyManagementDbContext>(dbOptions =>
             dbOptions.UseSqlServer(connectionString, sqlOptions =>
-                sqlOptions.MigrationsAssembly(typeof(PropertyManagementDbContext).Assembly.FullName)));
+            {
+                sqlOptions.MigrationsAssembly(typeof(PropertyManagementDbContext).Assembly.FullName);
+
+                // Retries the failures SQL Server itself calls transient: a dropped connection, a
+                // server still coming up, a throttled one. Worth having anywhere the database is
+                // across a network rather than on the same machine, which is every deployment and
+                // also the container setup.
+                sqlOptions.EnableRetryOnFailure(
+                    maxRetryCount: 5,
+                    maxRetryDelay: TimeSpan.FromSeconds(10),
+                    errorNumbersToAdd: null);
+            }));
 
         services
             .AddIdentity<ApplicationUser, IdentityRole>(identityOptions =>
@@ -57,6 +69,7 @@ public static class DependencyInjection
         services.AddScoped<IReviewService, ReviewService>();
         services.AddScoped<INoteService, NoteService>();
         services.AddScoped<IApplicationApplicantService, ApplicationApplicantService>();
+        services.AddScoped<IDashboardService, DashboardService>();
 
         // Injected wherever the code needs "now", so tests can supply their own clock.
         services.TryAddSingleton(TimeProvider.System);

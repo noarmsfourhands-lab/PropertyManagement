@@ -22,9 +22,9 @@ public record SectionProblem(ApplicationSection Section, string? Field, string M
 /// <summary>
 /// Answers what is wrong with a section, wherever that question is asked.
 ///
-/// Bonus four asks that a section can be saved while it is still wrong, that the Summary lists
-/// everything blocking submission, and that the rules are defined once per section with each error
-/// returned to the field it belongs to. That last part is why this evaluates the section's own
+/// A section can be saved while it is still wrong, the Summary lists everything blocking
+/// submission, and the rules are defined once per section with each error returned to the field it
+/// belongs to. That last part is why this evaluates the section's own
 /// data annotations with <see cref="Validator"/> rather than restating them: the attributes on the
 /// section view model are the single definition, used both by model binding when the section is on
 /// screen and by this when the Summary asks about a section the reader cannot currently see.

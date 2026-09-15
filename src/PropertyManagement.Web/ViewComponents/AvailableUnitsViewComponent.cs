@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using PropertyManagement.Domain.Entities;
-using PropertyManagement.Infrastructure.Services;
+using PropertyManagement.Application.Services;
 
 namespace PropertyManagement.Web.ViewComponents;
 
@@ -24,7 +24,7 @@ public class AvailableUnitsViewComponent(IPropertyService properties, TimeProvid
         var today = DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime);
 
         // Availability is decided in the database, and only the requested slice is materialised.
-        var available = await properties.GetAvailableUnitsAsync(today, maximum);
+        var available = await properties.GetAvailableUnitsAsync(today, maximum, cancellationToken: HttpContext.RequestAborted);
 
         var model = new AvailableUnitsModel
         {

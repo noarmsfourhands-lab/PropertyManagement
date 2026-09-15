@@ -1,10 +1,10 @@
 @model PropertyManagement.Web.ViewModels.Applications.ResidenceFormViewModel
 
-<form asp-action="SaveResidence" method="post"
+<form asp-action="Save" asp-controller="Residences" method="post"
       data-modal-form
       data-refresh-target="#residence-list"
       data-clears="[data-clear-on-success]"
-      data-refresh-url="@Url.Action("ResidenceListPartial", new { id = Model.ApplicationId })">
+      data-refresh-url="@Url.Action("ListPartial", "Residences", new { id = Model.ApplicationId })">
     @Html.AntiForgeryToken()
     <input type="hidden" asp-for="Id" />
     <input type="hidden" asp-for="ApplicationId" id="modal-ApplicationId" />

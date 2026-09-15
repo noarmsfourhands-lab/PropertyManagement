@@ -19,14 +19,21 @@ public class DatabaseSeederTests : IDisposable
     private readonly TestDatabase _database = new();
     private readonly ServiceProvider _services;
 
-    public DatabaseSeederTests()
+    public DatabaseSeederTests() => _services = ProviderOver(_database);
+
+    /// <summary>
+    /// A provider wired for seeding over one database. Three tests need one, over two databases and
+    /// with the switch both ways, and writing it out three times is how two of the copies end up
+    /// configured slightly differently from the one whose behaviour is being asserted.
+    /// </summary>
+    private static ServiceProvider ProviderOver(TestDatabase database, bool seedingEnabled = true)
     {
         var services = new ServiceCollection();
 
         services.AddLogging(builder => builder.SetMinimumLevel(LogLevel.Warning));
 
         services.AddDbContext<PropertyManagementDbContext>(options =>
-            options.UseSqlite(_database.Connection));
+            options.UseSqlite(database.Connection));
 
         services
             .AddIdentityCore<ApplicationUser>(options =>
@@ -38,8 +45,12 @@ public class DatabaseSeederTests : IDisposable
             .AddEntityFrameworkStores<PropertyManagementDbContext>();
 
         services.AddSingleton<TimeProvider>(new FixedTimeProvider(TestData.Now));
+
         services.Configure<SeedOptions>(options =>
         {
+            // Stated outright, because the option defaults to off: the safe default for a switch
+            // that invents tenants is the one that does nothing.
+            options.Enabled = seedingEnabled;
             options.PropertyManagerCount = 2;
             options.ApplicantCount = 3;
             options.PropertyCount = 2;
@@ -50,7 +61,7 @@ public class DatabaseSeederTests : IDisposable
 
         services.AddScoped<DatabaseSeeder>();
 
-        _services = services.BuildServiceProvider();
+        return services.BuildServiceProvider();
     }
 
     public void Dispose()
@@ -143,6 +154,39 @@ public class DatabaseSeederTests : IDisposable
     }
 
     [Fact]
+    public async Task Every_seeded_unit_has_the_bedrooms_its_type_says_it_has()
+    {
+        await SeedAsync();
+
+        await using var db = _database.CreateContext();
+
+        var units = await db.Units
+            .Select(unit => new { unit.UnitNumber, unit.Bedrooms, TypeName = unit.UnitType.Name })
+            .ToListAsync();
+
+        Assert.NotEmpty(units);
+
+        var expected = new Dictionary<string, int>(StringComparer.Ordinal)
+        {
+            ["Studio"] = 0,
+            ["Loft"] = 0,
+            ["One Bedroom"] = 1,
+            ["Two Bedroom"] = 2,
+            ["Three Bedroom"] = 3
+        };
+
+        // Drawing the type and the bedroom count independently produced units labelled
+        // "Two Bedroom" with nought bedrooms. Demo data that contradicts itself on screen costs
+        // more than it saves.
+        var wrong = units
+            .Where(unit => expected.TryGetValue(unit.TypeName, out var beds) && beds != unit.Bedrooms)
+            .Select(unit => $"{unit.UnitNumber} is a {unit.TypeName} with {unit.Bedrooms}")
+            .ToList();
+
+        Assert.True(wrong.Count == 0, string.Join("; ", wrong));
+    }
+
+    [Fact]
     public async Task The_lookup_includes_a_retired_unit_type_that_no_new_unit_uses()
     {
         await SeedAsync();
@@ -209,25 +253,8 @@ public class DatabaseSeederTests : IDisposable
 
         // A second database, seeded from the same fixed random seed, comes back identical.
         using var other = new TestDatabase();
-        var otherServices = new ServiceCollection();
-        otherServices.AddLogging(builder => builder.SetMinimumLevel(LogLevel.Warning));
-        otherServices.AddDbContext<PropertyManagementDbContext>(options => options.UseSqlite(other.Connection));
-        otherServices.AddIdentityCore<ApplicationUser>(options => options.Password.RequiredLength = 8)
-            .AddRoles<IdentityRole>()
-            .AddEntityFrameworkStores<PropertyManagementDbContext>();
-        otherServices.AddSingleton<TimeProvider>(new FixedTimeProvider(TestData.Now));
-        otherServices.Configure<SeedOptions>(options =>
-        {
-            options.PropertyManagerCount = 2;
-            options.ApplicantCount = 3;
-            options.PropertyCount = 2;
-            options.MinUnitsPerProperty = 8;
-            options.MaxUnitsPerProperty = 10;
-            options.ApplicationsPerStatus = 1;
-        });
-        otherServices.AddScoped<DatabaseSeeder>();
 
-        await using var provider = otherServices.BuildServiceProvider();
+        await using var provider = ProviderOver(other);
         await using (var scope = provider.CreateAsyncScope())
         {
             await scope.ServiceProvider.GetRequiredService<DatabaseSeeder>().SeedDataAsync();
@@ -244,17 +271,7 @@ public class DatabaseSeederTests : IDisposable
     [Fact]
     public async Task Seeding_is_disabled_by_configuration_without_touching_the_database()
     {
-        var services = new ServiceCollection();
-        services.AddLogging(builder => builder.SetMinimumLevel(LogLevel.Warning));
-        services.AddDbContext<PropertyManagementDbContext>(options => options.UseSqlite(_database.Connection));
-        services.AddIdentityCore<ApplicationUser>()
-            .AddRoles<IdentityRole>()
-            .AddEntityFrameworkStores<PropertyManagementDbContext>();
-        services.AddSingleton<TimeProvider>(new FixedTimeProvider(TestData.Now));
-        services.Configure<SeedOptions>(options => options.Enabled = false);
-        services.AddScoped<DatabaseSeeder>();
-
-        await using var provider = services.BuildServiceProvider();
+        await using var provider = ProviderOver(_database, seedingEnabled: false);
         await using var scope = provider.CreateAsyncScope();
 
         await scope.ServiceProvider.GetRequiredService<DatabaseSeeder>().SeedDataAsync();

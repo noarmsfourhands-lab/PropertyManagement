@@ -33,7 +33,12 @@ else
                         <td class="text-muted small">
                             @property.AddressLine1, @property.City @property.State @property.PostalCode
                         </td>
-                        <td class="text-end">@property.Units.Count</td>
+                        @* A link, not just a number: the units live on the property's own page,
+                           and the count is what a reader looks at when they want to get to them. *@
+                        <td class="text-end">
+                            <a asp-action="Details" asp-route-id="@property.Id"
+                               title="Add, edit and remove units">@property.Units.Count</a>
+                        </td>
                         <td class="text-end">
                             <button type="button" class="btn btn-sm btn-outline-secondary"
                                     data-modal-url="@Url.Action("Form", new { id = property.Id })">

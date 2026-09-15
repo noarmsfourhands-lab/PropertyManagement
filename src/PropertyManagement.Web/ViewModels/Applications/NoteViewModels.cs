@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using PropertyManagement.Domain.Entities;
-using PropertyManagement.Infrastructure.Services;
+using PropertyManagement.Application.Services;
 
 namespace PropertyManagement.Web.ViewModels.Applications;
 

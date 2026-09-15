@@ -18,11 +18,11 @@
             <li class="list-group-item">
                 <div class="d-flex justify-content-between align-items-start">
                     <div>
-                        <span class="badge @ApplicationListViewModel.BadgeClassFor(entry.FromStatus)">
+                        <span class="@ApplicationListViewModel.BadgeClassFor(entry.FromStatus)">
                             @ApplicationListViewModel.DisplayNameFor(entry.FromStatus)
                         </span>
                         <span class="text-muted mx-1">&rarr;</span>
-                        <span class="badge @ApplicationListViewModel.BadgeClassFor(entry.ToStatus)">
+                        <span class="@ApplicationListViewModel.BadgeClassFor(entry.ToStatus)">
                             @ApplicationListViewModel.DisplayNameFor(entry.ToStatus)
                         </span>
 
@@ -32,7 +32,7 @@
                         }
 
                         <div class="small text-muted mt-1">
-                            @entry.ActorName &middot; @entry.OccurredAtUtc.ToLocalTime().ToString("d MMM yyyy, HH:mm")
+                            @entry.ActorName &middot; @TimeDisplay.Moment(entry.OccurredAtUtc)
                         </div>
 
                         @if (!string.IsNullOrWhiteSpace(entry.Comment))
